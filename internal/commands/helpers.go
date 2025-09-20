@@ -10,6 +10,24 @@ import (
 
 const messageLineCharLimit = 120
 
+func isThreadChannel(channelType discordgo.ChannelType) bool {
+	switch channelType {
+	case discordgo.ChannelTypeGuildPublicThread, discordgo.ChannelTypeGuildPrivateThread, discordgo.ChannelTypeGuildNewsThread:
+		return true
+	default:
+		return false
+	}
+}
+
+func isThreadParentChannel(channelType discordgo.ChannelType) bool {
+	switch channelType {
+	case discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews, discordgo.ChannelTypeGuildForum:
+		return true
+	default:
+		return false
+	}
+}
+
 func buildMessageLink(guildID, channelID, messageID string) string {
 	if guildID == "" || channelID == "" || messageID == "" {
 		return ""
@@ -19,7 +37,12 @@ func buildMessageLink(guildID, channelID, messageID string) string {
 
 func isTextChannel(channelType discordgo.ChannelType) bool {
 	switch channelType {
-	case discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews, discordgo.ChannelTypeGuildForum:
+	case discordgo.ChannelTypeGuildText,
+		discordgo.ChannelTypeGuildNews,
+		discordgo.ChannelTypeGuildForum,
+		discordgo.ChannelTypeGuildPublicThread,
+		discordgo.ChannelTypeGuildPrivateThread,
+		discordgo.ChannelTypeGuildNewsThread:
 		return true
 	default:
 		return false

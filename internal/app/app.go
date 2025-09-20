@@ -109,6 +109,11 @@ func (a *App) handleInteractionCreate(session *discordgo.Session, interaction *d
 	cmd.Handle(session, interaction)
 }
 
+// Session returns the underlying Discord session.
+func (a *App) Session() *discordgo.Session {
+	return a.session
+}
+
 func (a *App) unregisterAll() {
 	if a.applicationID == "" {
 		return
