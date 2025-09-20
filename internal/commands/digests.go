@@ -95,6 +95,8 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 		fallbackBlocks []string
 	)
 
+	memberNames := make(map[string]string)
+
 	for _, ch := range channels {
 		if !isTextChannel(ch.Type) {
 			continue
@@ -135,7 +137,7 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 				}
 
 				digest := messageDigest{
-					Author:         resolveAuthor(msg),
+					Author:         resolveAuthor(session, guildID, msg, memberNames),
 					AvatarURL:      userAvatarURL(msg.Author),
 					Content:        extractContent(msg),
 					Timestamp:      timestamp,

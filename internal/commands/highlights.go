@@ -9,6 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const highlightEmbedColor = 0xb0b0b0
+
 // Highlight represents a single summary item produced by the language model.
 type Highlight struct {
 	Title       string `json:"title"`
@@ -54,7 +56,7 @@ func composeFinalMessage(highlights []Highlight, fallback string) string {
 	}
 
 	date := time.Now().Format("2006年1月2日")
-	header := fmt.Sprintf("📣 [夕刊] %s", date)
+	header := fmt.Sprintf("[**夕刊**] %s", date)
 	return truncateRunes(header, messageCharBudget)
 }
 
@@ -84,6 +86,7 @@ func BuildSummaryMessage(header string, highlights []Highlight, digests []channe
 			Title:       title,
 			Description: description,
 			URL:         link,
+			Color:       highlightEmbedColor,
 		}
 		if msg := findMessageByURL(digests, link); msg != nil {
 			embed.Author = &discordgo.MessageEmbedAuthor{Name: msg.Author, IconURL: msg.AvatarURL}
