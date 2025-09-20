@@ -49,58 +49,60 @@ func isTextChannel(channelType discordgo.ChannelType) bool {
 	}
 }
 
-// サーバーニックネームを優先しつつ、なければ利用可能な表示名へ段階的にフォールバック
-// ユーティリティで同時にAPI呼び出しを抑えるために簡単なキャッシュをしておく
+// サーバーニックネームを最優先し、段階的にフォールバックして名前を取得する。
 func resolveAuthor(session *discordgo.Session, guildID string, msg *discordgo.Message, cache map[string]string) string {
 	const unknown = "Unknown"
 	if msg == nil {
 		return unknown
 	}
 
-	if name := displayNameFromMember(msg.Member); name != "" {
-		if cache != nil && msg.Author != nil {
-			cache[msg.Author.ID] = name
+	// 小さなヘルパー：キャッシュに書いて返す
+	// APIの呼び出しを抑制する
+	putAndReturn := func(userID, name string) string {
+		if cache != nil && userID != "" && name != "" {
+			cache[userID] = name
 		}
 		return name
 	}
 
-	var userID string
+	if name := displayNameFromMember(msg.Member); name != "" {
+		uid := ""
+		if msg.Author != nil {
+			uid = msg.Author.ID
+		}
+		return putAndReturn(uid, name)
+	}
+
+	userID := ""
 	if msg.Author != nil {
 		userID = msg.Author.ID
-		if cache != nil {
-			if cached, ok := cache[userID]; ok {
-				return cached
+	}
+
+	if cache != nil && userID != "" {
+		if cached, ok := cache[userID]; ok && cached != "" {
+			return cached
+		}
+	}
+
+	if session != nil && session.State != nil && guildID != "" && userID != "" {
+		if member, err := session.State.Member(guildID, userID); err == nil {
+			if name := displayNameFromMember(member); name != "" {
+				return putAndReturn(userID, name)
 			}
 		}
 	}
 
 	if session != nil && guildID != "" && userID != "" {
-		if session.State != nil {
-			if member, err := session.State.Member(guildID, userID); err == nil {
-				if name := displayNameFromMember(member); name != "" {
-					if cache != nil {
-						cache[userID] = name
-					}
-					return name
-				}
-			}
-		}
 		if member, err := session.GuildMember(guildID, userID); err == nil {
 			if name := displayNameFromMember(member); name != "" {
-				if cache != nil {
-					cache[userID] = name
-				}
-				return name
+				return putAndReturn(userID, name)
 			}
 		}
 	}
 
 	if msg.Author != nil {
 		if name := displayNameFromUser(msg.Author); name != "" {
-			if cache != nil && userID != "" {
-				cache[userID] = name
-			}
-			return name
+			return putAndReturn(userID, name)
 		}
 	}
 
