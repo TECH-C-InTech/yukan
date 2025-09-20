@@ -55,8 +55,8 @@ func (c *Client) Summarize(ctx context.Context, prompt string) (string, error) {
 		return "", fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
-	text, err := resp.Text()
-	if err != nil {
+	text := resp.Text()
+	if text == "" {
 		return "", fmt.Errorf("failed to read gemini response text: %w", err)
 	}
 
