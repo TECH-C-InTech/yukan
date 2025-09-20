@@ -36,14 +36,21 @@ type GetCommand struct {
 	summarizer Summarizer
 }
 
+type attachmentInfo struct {
+	Filename    string
+	ContentType string
+	Size        int
+	URL         string
+}
+
 type messageDigest struct {
-	Author    string
-	Content   string
-	Timestamp time.Time
-	MessageID string
-	ChannelID string
-	Link      string
-	AttachmentURLs []string
+	Author         string
+	Content        string
+	Timestamp      time.Time
+	MessageID      string
+	ChannelID      string
+	Link           string
+	AttachmentInfo []attachmentInfo
 }
 
 type channelDigest struct {
@@ -248,7 +255,7 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 					MessageID:      msg.ID,
 					ChannelID:      ch.ID,
 					Link:           buildMessageLink(guildID, ch.ID, msg.ID),
-					AttachmentURLs: extractAttachmentURLs(msg),
+					AttachmentInfo: extractAttachmentInfo(msg),
 				}
 
 				collected = append(collected, digest)

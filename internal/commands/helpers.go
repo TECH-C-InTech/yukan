@@ -104,14 +104,19 @@ func truncateRunes(input string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
-func extractAttachmentURLs(msg *discordgo.Message) []string {
+func extractAttachmentInfo(msg *discordgo.Message) []attachmentInfo {
 	if msg == nil || len(msg.Attachments) == 0 {
 		return nil
 	}
 
-	urls := make([]string, 0, len(msg.Attachments))
+	attachmentInfos := make([]attachmentInfo, 0, len(msg.Attachments))
 	for _, attachment := range msg.Attachments {
-		urls = append(urls, attachment.URL)
+		attachmentInfos = append(attachmentInfos, attachmentInfo{
+			Filename:    attachment.Filename,
+			ContentType: attachment.ContentType,
+			Size:        attachment.Size,
+			URL:         attachment.URL,
+		})
 	}
-	return urls
+	return attachmentInfos
 }
