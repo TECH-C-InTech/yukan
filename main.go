@@ -23,9 +23,10 @@ const (
 	dailySummaryChannelID = "1418904371579719710"
 )
 
+// InTech_dev
 // const (
-// 	dailySummaryGuildID   = "1216568461661048902"
-// 	dailySummaryChannelID = "1216568464353787936"
+// 	dailySummaryGuildID   = "1417771222355152980"
+// 	dailySummaryChannelID = "1417771223433351170"
 // )
 
 func main() {
@@ -131,13 +132,22 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 
 		content, embeds := commands.BuildSummaryMessage(trimmed)
 		if len(embeds) > 0 {
-			if content == "" {
-				content = trimmed
+			if content != "" {
+				if _, err := session.ChannelMessageSend(dailySummaryChannelID, content); err != nil {
+					log.Printf("daily summary: failed to post header message: %v", err)
+					http.Error(w, "failed to post summary", http.StatusInternalServerError)
+					return
+				}
 			}
-			if _, err := session.ChannelMessageSendComplex(dailySummaryChannelID, &discordgo.MessageSend{Content: content, Embeds: embeds}); err != nil {
-				log.Printf("daily summary: failed to post embed message: %v", err)
-				http.Error(w, "failed to post summary", http.StatusInternalServerError)
-				return
+			for _, embed := range embeds {
+				if embed == nil {
+					continue
+				}
+				if _, err := session.ChannelMessageSendComplex(dailySummaryChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
+					log.Printf("daily summary: failed to post embed message: %v", err)
+					http.Error(w, "failed to post summary", http.StatusInternalServerError)
+					return
+				}
 			}
 		} else {
 			if _, err := session.ChannelMessageSend(dailySummaryChannelID, trimmed); err != nil {
