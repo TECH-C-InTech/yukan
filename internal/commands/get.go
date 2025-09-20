@@ -43,6 +43,7 @@ type messageDigest struct {
 	MessageID string
 	ChannelID string
 	Link      string
+	AttachmentURLs []string
 }
 
 type channelDigest struct {
@@ -241,12 +242,13 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 				}
 
 				digest := messageDigest{
-					Author:    resolveAuthor(msg),
-					Content:   extractContent(msg),
-					Timestamp: timestamp,
-					MessageID: msg.ID,
-					ChannelID: ch.ID,
-					Link:      buildMessageLink(guildID, ch.ID, msg.ID),
+					Author:         resolveAuthor(msg),
+					Content:        extractContent(msg),
+					Timestamp:      timestamp,
+					MessageID:      msg.ID,
+					ChannelID:      ch.ID,
+					Link:           buildMessageLink(guildID, ch.ID, msg.ID),
+					AttachmentURLs: extractAttachmentURLs(msg),
 				}
 
 				collected = append(collected, digest)

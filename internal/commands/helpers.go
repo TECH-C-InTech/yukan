@@ -69,7 +69,11 @@ func extractContent(msg *discordgo.Message) string {
 
 	content := msg.Content
 	if content == "" && len(msg.Attachments) > 0 {
-		content = fmt.Sprintf("添付ファイル (%s)", msg.Attachments[0].Filename)
+		attachmentNames := make([]string, len(msg.Attachments))
+		for i, att := range msg.Attachments {
+			attachmentNames[i] = att.Filename
+		}
+		content = fmt.Sprintf("(添付ファイルあり: %s)", strings.Join(attachmentNames, ", "))
 	}
 	if content == "" {
 		content = "(内容なし)"
@@ -98,4 +102,16 @@ func truncateRunes(input string, max int) string {
 
 	runes := []rune(input)
 	return string(runes[:max]) + "…"
+}
+
+func extractAttachmentURLs(msg *discordgo.Message) []string {
+	if msg == nil || len(msg.Attachments) == 0 {
+		return nil
+	}
+
+	urls := make([]string, 0, len(msg.Attachments))
+	for _, attachment := range msg.Attachments {
+		urls = append(urls, attachment.URL)
+	}
+	return urls
 }
