@@ -19,15 +19,11 @@ import (
 )
 
 const (
-	dailySummaryGuildID   = "1239827951667908668"
-	dailySummaryChannelID = "1418904371579719710"
+	dailySummaryGuildIDProd   = "1239827951667908668"
+	dailySummaryChannelIDProd = "1418904371579719710"
+	dailySummaryGuildIDDev    = "1417771222355152980"
+	dailySummaryChannelIDDev  = "1417771223433351170"
 )
-
-// InTech_dev
-// const (
-// 	dailySummaryGuildID   = "1417771222355152980"
-// 	dailySummaryChannelID = "1417771223433351170"
-// )
 
 func main() {
 	token := os.Getenv("DISCORD_BOT_TOKEN")
@@ -116,8 +112,16 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 			return
 		}
 
+		guildID := dailySummaryGuildIDProd
+		channelID := dailySummaryChannelIDProd
+		switch strings.ToLower(r.URL.Query().Get("target")) {
+		case "dev":
+			guildID = dailySummaryGuildIDDev
+			channelID = dailySummaryChannelIDDev
+		}
+
 		ctx := r.Context()
-		message, highlights, digests, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, dailySummaryGuildID)
+		message, highlights, digests, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, guildID)
 		if err != nil {
 			log.Printf("daily summary: failed to generate message: %v", err)
 			http.Error(w, "failed to generate summary", http.StatusInternalServerError)
@@ -133,7 +137,7 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 		content, embeds := commands.BuildSummaryMessage(trimmed, highlights, digests)
 		if len(embeds) > 0 {
 			if content != "" {
-				if _, err := session.ChannelMessageSend(dailySummaryChannelID, content); err != nil {
+				if _, err := session.ChannelMessageSend(channelID, content); err != nil {
 					log.Printf("daily summary: failed to post header message: %v", err)
 					http.Error(w, "failed to post summary", http.StatusInternalServerError)
 					return
@@ -143,14 +147,14 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 				if embed == nil {
 					continue
 				}
-				if _, err := session.ChannelMessageSendComplex(dailySummaryChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
+				if _, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
 					log.Printf("daily summary: failed to post embed message: %v", err)
 					http.Error(w, "failed to post summary", http.StatusInternalServerError)
 					return
 				}
 			}
 		} else {
-			if _, err := session.ChannelMessageSend(dailySummaryChannelID, trimmed); err != nil {
+			if _, err := session.ChannelMessageSend(channelID, trimmed); err != nil {
 				log.Printf("daily summary: failed to post message: %v", err)
 				http.Error(w, "failed to post summary", http.StatusInternalServerError)
 				return
