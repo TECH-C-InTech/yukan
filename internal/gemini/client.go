@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"google.golang.org/genai"
+
+	"yukan/internal/commands"
 )
 
 const defaultModel = "gemini-2.0-flash"
@@ -34,36 +36,54 @@ func (c *Client) WithModel(model string) *Client {
 	return &clone
 }
 
-// Summarize sends the prompt to Gemini and returns the condensed text.
-func (c *Client) Summarize(ctx context.Context, prompt string) (string, error) {
+// Summarize sends the prompt to Gemini and returns structured highlights.
+func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highlight, error) {
 	if strings.TrimSpace(prompt) == "" {
-		return "", fmt.Errorf("prompt is empty")
+		return nil, fmt.Errorf("prompt is empty")
 	}
 	if c == nil || c.apiKey == "" {
-		return "", fmt.Errorf("gemini client is not configured")
+		return nil, fmt.Errorf("gemini client is not configured")
 	}
 
 	cfg := &genai.ClientConfig{APIKey: c.apiKey}
 
 	gClient, err := genai.NewClient(ctx, cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create gemini client: %w", err)
+		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
-	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(prompt), nil)
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeArray,
+			Items: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"title":       {Type: genai.TypeString},
+					"emoji":       {Type: genai.TypeString},
+					"description": {Type: genai.TypeString},
+					"link":        {Type: genai.TypeString},
+				},
+				PropertyOrdering: []string{"title", "emoji", "description", "link"},
+				Required:         []string{"title", "description", "link"},
+			},
+		},
+	}
+
+	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(prompt), config)
 	if err != nil {
-		return "", fmt.Errorf("failed to call gemini generateContent: %w", err)
+		return nil, fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
-	text := resp.Text()
-	if text == "" {
-		return "", fmt.Errorf("failed to read gemini response text: %w", err)
+	raw := strings.TrimSpace(resp.Text())
+	if raw == "" {
+		return nil, fmt.Errorf("gemini returned empty summary")
 	}
 
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "", fmt.Errorf("gemini returned empty summary")
+	highlights, err := commands.ParseHighlights(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode gemini highlights: %w", err)
 	}
 
-	return text, nil
+	return highlights, nil
 }

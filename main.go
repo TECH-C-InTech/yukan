@@ -117,7 +117,7 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 		}
 
 		ctx := r.Context()
-		message, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, dailySummaryGuildID)
+		message, highlights, digests, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, dailySummaryGuildID)
 		if err != nil {
 			log.Printf("daily summary: failed to generate message: %v", err)
 			http.Error(w, "failed to generate summary", http.StatusInternalServerError)
@@ -130,7 +130,7 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 			return
 		}
 
-		content, embeds := commands.BuildSummaryMessage(trimmed)
+		content, embeds := commands.BuildSummaryMessage(trimmed, highlights, digests)
 		if len(embeds) > 0 {
 			if content != "" {
 				if _, err := session.ChannelMessageSend(dailySummaryChannelID, content); err != nil {

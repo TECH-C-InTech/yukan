@@ -82,6 +82,13 @@ func extractContent(msg *discordgo.Message) string {
 	return sanitizeContent(content)
 }
 
+func userAvatarURL(user *discordgo.User) string {
+	if user == nil {
+		return ""
+	}
+	return user.AvatarURL("")
+}
+
 func sanitizeContent(input string) string {
 	cleaned := strings.ReplaceAll(input, "\n", " ")
 	cleaned = strings.ReplaceAll(cleaned, "\r", " ")
