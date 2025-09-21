@@ -157,6 +157,23 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 			}
 		}
 
+		// After successful posting, cleanup all Files so they don't linger to next day.
+		if summarizerClient, ok := summarizer.(*gemini.Client); ok && summarizerClient != nil {
+			go func() {
+				// Use a short-lived context for cleanup to avoid hanging HTTP handler.
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				deleted, delErr := summarizerClient.DeleteAllFiles(cleanupCtx)
+				if delErr != nil {
+					log.Printf("daily summary: cleanup completed with error: %v (deleted=%d)", delErr, deleted)
+				} else {
+					log.Printf("daily summary: cleanup completed (deleted=%d)", deleted)
+				}
+			}()
+		} else {
+			log.Printf("daily summary: cleanup skipped (summarizer is not *gemini.Client)")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("posted"))
 	})
