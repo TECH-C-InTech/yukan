@@ -27,7 +27,7 @@ var allowedGuildIDs = map[string]struct{}{
 
 // Summarizer generates a digest from the collected messages.
 type Summarizer interface {
-	Summarize(ctx context.Context, prompt string) (string, error)
+	Summarize(ctx context.Context, digests []ChannelDigest) (string, error)
 }
 
 // GetCommand implements the /get slash command.
@@ -36,11 +36,12 @@ type GetCommand struct {
 	summarizer Summarizer
 }
 
-type attachmentInfo struct {
+type AttachmentInfo struct {
 	Filename    string
 	ContentType string
 	Size        int
 	URL         string
+	ProxyURL    string
 }
 
 type messageDigest struct {
@@ -50,10 +51,10 @@ type messageDigest struct {
 	MessageID      string
 	ChannelID      string
 	Link           string
-	AttachmentInfo []attachmentInfo
+	AttachmentInfo []AttachmentInfo
 }
 
-type channelDigest struct {
+type ChannelDigest struct {
 	Name     string
 	Messages []messageDigest
 }
@@ -139,7 +140,7 @@ func (c *GetCommand) respond(session *discordgo.Session, interaction *discordgo.
 	}
 }
 
-func collectLatestMessages(session *discordgo.Session, guildID string, botID string) ([]channelDigest, string, error) {
+func collectLatestMessages(session *discordgo.Session, guildID string, botID string) ([]ChannelDigest, string, error) {
 	if guildID == "" {
 		return nil, "このコマンドはサーバー内のみで利用できます", nil
 	}
@@ -205,7 +206,7 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 	}
 
 	var (
-		digests        []channelDigest
+		digests        []ChannelDigest
 		fallbackBlocks []string
 	)
 
@@ -275,7 +276,7 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 		case len(collected) == 0:
 			fallbackBlocks = append(fallbackBlocks, fmt.Sprintf("#%s: 過去24時間のメッセージはありません", display))
 		default:
-			digest := channelDigest{Name: display, Messages: collected}
+			digest := ChannelDigest{Name: display, Messages: collected}
 			digests = append(digests, digest)
 			fallbackBlocks = append(fallbackBlocks, renderChannelBlock(digest))
 		}
@@ -317,14 +318,11 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 			defer cancel()
 		}
 
-		prompt := buildSummaryPrompt(digests)
-		if prompt != "" {
-			summary, err := summarizer.Summarize(summaryCtx, prompt)
-			if err != nil {
-				log.Printf("failed to summarize messages: %v", err)
-			} else if trimmed := strings.TrimSpace(summary); trimmed != "" {
-				finalMessage = composeFinalMessage(trimmed, fallback)
-			}
+		summary, err := summarizer.Summarize(summaryCtx, digests)
+		if err != nil {
+			log.Printf("failed to summarize messages: %v", err)
+		} else if trimmed := strings.TrimSpace(summary); trimmed != "" {
+			finalMessage = composeFinalMessage(trimmed, fallback)
 		}
 	}
 
@@ -339,7 +337,7 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 	return finalMessage, nil
 }
 
-func renderChannelBlock(digest channelDigest) string {
+func renderChannelBlock(digest ChannelDigest) string {
 	lines := make([]string, 0, len(digest.Messages)+1)
 	lines = append(lines, fmt.Sprintf("#%s", digest.Name))
 
@@ -358,49 +356,6 @@ func formatMessageLine(msg messageDigest) string {
 		return fmt.Sprintf("- [%s] %s: %s (%s)", timestamp, msg.Author, truncateRunes(msg.Content, messageLineCharLimit), link)
 	}
 	return fmt.Sprintf("- [%s] %s: %s", timestamp, msg.Author, truncateRunes(msg.Content, messageLineCharLimit))
-}
-
-func buildSummaryPrompt(digests []channelDigest) string {
-	if len(digests) == 0 {
-		return ""
-	}
-
-	var builder strings.Builder
-	builder.WriteString("あなたはDiscordサーバーの編集者です。以下は過去24時間に投稿されたメッセージ一覧です。最も注目すべき出来事を最大3件選び、指定のフォーマットで日本語の夕刊ハイライトを作成してください。\n")
-	builder.WriteString("\n出力要件:\n")
-	builder.WriteString("- Markdownを使用すること。\n")
-	builder.WriteString("- 各トピックは `### 絵文字[キャッチーなタイトル](URL)（改行）コメント` の形式にすること。\n")
-	builder.WriteString("- 例\n")
-	builder.WriteString("  ### 🎉[明日のイベント参加希望者が続々！](https://discord.com/channels/...)\n")
-	builder.WriteString("  会場は池袋に決定、参加希望者はリアクションを。\n")
-	builder.WriteString("- トピック数は最大3件（重要度が低ければ1～2件でも可）。\n")
-	builder.WriteString("- コメントは簡潔に1～2文でまとめること。\n")
-	builder.WriteString("- `詳細` のリンクには提供されたメッセージURLを必ず1件使用すること。\n")
-	builder.WriteString("- 指定の形式以外の文章やヘッダ・フッタは出力しないこと。\n")
-
-	for _, digest := range digests {
-		builder.WriteString("\n# ")
-		builder.WriteString(digest.Name)
-		builder.WriteString("\n")
-		for i := len(digest.Messages) - 1; i >= 0; i-- {
-			msg := digest.Messages[i]
-			builder.WriteString("- ")
-			builder.WriteString(msg.Timestamp.Format("01/02 15:04"))
-			builder.WriteString(" ")
-			builder.WriteString(msg.Author)
-			builder.WriteString(" ")
-			builder.WriteString(digest.Name)
-			if msg.Link != "" {
-				builder.WriteString(" ")
-				builder.WriteString(msg.Link)
-			}
-			builder.WriteString(": ")
-			builder.WriteString(msg.Content)
-			builder.WriteString("\n")
-		}
-	}
-
-	return builder.String()
 }
 
 func composeFinalMessage(summary, fallback string) string {
