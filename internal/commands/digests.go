@@ -205,17 +205,16 @@ func buildSummaryPrompt(digests []channelDigest) string {
 	}
 
 	var builder strings.Builder
-	builder.WriteString("あなたはDiscordサーバーの編集者です。以下は過去24時間に投稿されたメッセージ一覧です。最も注目すべき出来事を最大3件選び、指定のフォーマットで日本語の夕刊ハイライトを作成してください。\n")
+	builder.WriteString("あなたはDiscordサーバーの編集者です。以下は過去24時間に投稿されたメッセージ一覧です。最も注目すべき出来事を最大3件選び、日本語の夕刊ハイライトを作成してください。\n")
 	builder.WriteString("\n出力要件:\n")
-	builder.WriteString("- Markdownを使用すること。\n")
-	builder.WriteString("- 各トピックは `### [キャッチーなタイトル](URL) 絵文字（改行）コメント` の形式にすること。\n")
-	builder.WriteString("- 例\n")
-	builder.WriteString("  ### [明日のイベント参加希望者が続々！](https://discord.com/channels/...) 🎉\n")
-	builder.WriteString("  会場は池袋に決定、参加希望者はリアクションを。\n")
-	builder.WriteString("- トピック数は最大3件（重要度が低ければ1～2件でも可）。\n")
-	builder.WriteString("- コメントは簡潔に1～2文でまとめること。\n")
-	builder.WriteString("- `詳細` のリンクには提供されたメッセージURLを必ず1件使用すること。\n")
-	builder.WriteString("- 指定の形式以外の文章やヘッダ・フッタは出力しないこと。\n")
+	builder.WriteString("- 出力はJSON配列のみとし、各要素は {\"title\": string, \"emoji\": string, \"description\": string, \"link\": string} 形式のオブジェクトにすること。\n")
+	builder.WriteString("- title・description・linkは必須。emojiは空文字でもよいが、合う絵文字があれば含めること。\n")
+	builder.WriteString("- titleには絵文字をつけないこと。\n")
+	builder.WriteString("- descriptionは1～2文で要点と面白さを簡潔に伝えること。\n")
+	builder.WriteString("- linkには必ず提供されたメッセージURLのうち関連する1件を使用すること。\n")
+	builder.WriteString("- ハイライト数は重要度に応じて1～3件とすること。\n")
+	builder.WriteString("- JSON以外のテキストは一切含めないこと。\n")
+	builder.WriteString("- 出来事は話題性や賞賛すべき内容、恋愛ネタなど盛り上がりそうなものを選び、タイトルはキャッチーに仕上げること。正確性よりも面白さやユーモアを優先してよい。\n")
 
 	for _, digest := range digests {
 		builder.WriteString("\n# ")
