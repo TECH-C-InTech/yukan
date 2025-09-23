@@ -214,6 +214,7 @@ func buildSummaryPrompt(digests []channelDigest) string {
 	builder.WriteString("- linkには必ず提供されたメッセージURLのうち関連する1件を使用すること。\n")
 	builder.WriteString("- ハイライト数は重要度に応じて1～3件とすること。\n")
 	builder.WriteString("- JSON以外のテキストは一切含めないこと。\n")
+	builder.WriteString("- discord bot開発に関する話題は多くの人に関係ないので含めないこと。\n")
 	builder.WriteString("- 出来事は話題性や賞賛すべき内容、恋愛ネタなど盛り上がりそうなものを選び、タイトルはキャッチーに仕上げること。正確性よりも面白さやユーモアを優先してよい。\n")
 
 	for _, digest := range digests {
