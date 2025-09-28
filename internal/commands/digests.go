@@ -223,11 +223,11 @@ func buildSummaryPrompt(digests []channelDigest) string {
 
 	builder.WriteString("\n除外/優先ルール:\n")
 	builder.WriteString("- 除外: 運営・テスト・自動ログ・Bot設定や実装の技術的な詳細、個人への中傷/過度な炎上、NSFW。\n")
+	builder.WriteString("- 内輪の短文のみ/リンクだけ/未成熟な下書きは原則不採用。\n")
 
 	builder.WriteString("\n内部評価（出力に含めない）:\n")
 	builder.WriteString("- 各候補を以下の4軸で0〜5点で評価し、総合上位から採用。ただし多様性制約を優先。\n")
-	builder.WriteString("  1) 話題性/盛り上がり  2) 共有価値（みんなが知れて嬉しい）  3) 新規性/影響度  4) ポジティブ度\n")
-	builder.WriteString("- 同点の場合は、(a) トピック被りが少ない方、(b) 直近の投稿、(c) より端的に説明できる方を優先。\n")
+	builder.WriteString("  1) 話題性/盛り上がり  2) 共有価値（みんなが知れて嬉しい）  3) 新規性/影響度  4) 深度/洞察度（議論の質や学びの多さ）\n")
 
 	builder.WriteString("\nトーン/スタイル:\n")
 	builder.WriteString("- 新聞の夕刊風に、軽やかで前向き。冷笑・皮肉・攻撃的な表現は避ける。\n")

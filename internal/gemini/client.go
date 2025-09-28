@@ -10,7 +10,7 @@ import (
 	"yukan/internal/commands"
 )
 
-const defaultModel = "gemini-2.0-flash"
+const defaultModel = "gemini-2.5-flash"
 
 // Client wraps the official Gemini Go SDK to generate summaries.
 type Client struct {
