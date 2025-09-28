@@ -21,7 +21,6 @@ import (
 const (
 	dailySummaryGuildIDProd   = "1239827951667908668"
 	dailySummaryChannelIDProd = "1418904371579719710"
-	dailySummaryGuildIDDev    = "1417771222355152980"
 	dailySummaryChannelIDDev  = "1417771223433351170"
 )
 
@@ -116,7 +115,7 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 		channelID := dailySummaryChannelIDProd
 		switch strings.ToLower(r.URL.Query().Get("target")) {
 		case "dev":
-			guildID = dailySummaryGuildIDDev
+			guildID = dailySummaryGuildIDProd
 			channelID = dailySummaryChannelIDDev
 		}
 

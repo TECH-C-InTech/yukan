@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ type Highlight struct {
 	Emoji       string `json:"emoji"`
 	Description string `json:"description"`
 	Link        string `json:"link"`
+	Color       string `json:"color"`
 }
 
 // ParseHighlights decodes structured highlight output into sanitized values.
@@ -38,6 +40,7 @@ func ParseHighlights(raw string) ([]Highlight, error) {
 		if h.Title == "" || h.Description == "" || h.Link == "" {
 			continue
 		}
+		h.Color = strings.TrimSpace(h.Color)
 		filtered = append(filtered, h)
 	}
 	if len(filtered) == 0 {
@@ -82,11 +85,13 @@ func BuildSummaryMessage(header string, highlights []Highlight, digests []channe
 			title = fmt.Sprintf("%s %s", title, emoji)
 		}
 
+		color := resolveHighlightColor(highlight.Color)
+
 		embed := &discordgo.MessageEmbed{
 			Title:       title,
 			Description: description,
 			URL:         link,
-			Color:       highlightEmbedColor,
+			Color:       color,
 		}
 		if msg := findMessageByURL(digests, link); msg != nil {
 			embed.Author = &discordgo.MessageEmbedAuthor{Name: msg.Author, IconURL: msg.AvatarURL}
@@ -110,4 +115,30 @@ func findMessageByURL(digests []channelDigest, url string) *messageDigest {
 		}
 	}
 	return nil
+}
+
+func resolveHighlightColor(raw string) int {
+	if color, ok := parseHexColor(raw); ok {
+		return color
+	}
+	return highlightEmbedColor
+}
+
+func parseHexColor(raw string) (int, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return 0, false
+	}
+	if strings.HasPrefix(trimmed, "0x") || strings.HasPrefix(trimmed, "0X") {
+		trimmed = trimmed[2:]
+	}
+	trimmed = strings.TrimPrefix(trimmed, "#")
+	if len(trimmed) != 6 {
+		return 0, false
+	}
+	value, err := strconv.ParseUint(trimmed, 16, 32)
+	if err != nil {
+		return 0, false
+	}
+	return int(value), true
 }
