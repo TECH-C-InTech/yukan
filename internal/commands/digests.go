@@ -91,8 +91,9 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 	}
 
 	var (
-		digests        []channelDigest
-		fallbackBlocks []string
+		digests            []channelDigest
+		fallbackBlocks     []string
+		totalCollectedMsgs int
 	)
 
 	memberNames := make(map[string]string)
@@ -162,8 +163,9 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 		case failedFetch:
 			fallbackBlocks = append(fallbackBlocks, fmt.Sprintf("#%s: メッセージを取得できませんでした", display))
 		case len(collected) == 0:
-			fallbackBlocks = append(fallbackBlocks, fmt.Sprintf("#%s: 過去24時間のメッセージはありません", display))
+			continue
 		default:
+			totalCollectedMsgs += len(collected)
 			digest := channelDigest{Name: display, Messages: collected}
 			digests = append(digests, digest)
 			fallbackBlocks = append(fallbackBlocks, renderChannelBlock(digest))
@@ -172,7 +174,11 @@ func collectLatestMessages(session *discordgo.Session, guildID string, botID str
 
 	fallback := strings.Join(fallbackBlocks, "\n\n")
 	if strings.TrimSpace(fallback) == "" {
-		fallback = "対象のテキストチャンネルが見つかりませんでした"
+		if totalCollectedMsgs == 0 {
+			fallback = "過去24時間のメッセージはありません"
+		} else {
+			fallback = "対象のテキストチャンネルが見つかりませんでした"
+		}
 	}
 
 	return digests, fallback, nil
@@ -222,7 +228,7 @@ func buildSummaryPrompt(digests []channelDigest) string {
 	builder.WriteString("- 事実は必ず提供メッセージ内からのみ。推測で人物名・数値・成果を追加しない。\n")
 
 	builder.WriteString("\n除外/優先ルール:\n")
-	builder.WriteString("- 除外: 運営・テスト・自動ログ・Bot設定や実装の技術的な詳細、個人への中傷/過度な炎上、NSFW。\n")
+	builder.WriteString("- 除外: 運営・テスト・自動ログ・Bot設定や実装の技術的な詳細。\n")
 	builder.WriteString("- 内輪の短文のみ/リンクだけ/未成熟な下書きは原則不採用。\n")
 
 	builder.WriteString("\n内部評価（出力に含めない）:\n")

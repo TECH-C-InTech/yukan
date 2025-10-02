@@ -76,7 +76,11 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 		return nil, fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
-	raw := strings.TrimSpace(resp.Text())
+	raw, err := extractResponsePayload(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read gemini response: %w", err)
+	}
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, fmt.Errorf("gemini returned empty summary")
 	}
@@ -87,4 +91,42 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 	}
 
 	return highlights, nil
+}
+
+func extractResponsePayload(resp *genai.GenerateContentResponse) (string, error) {
+	if resp == nil {
+		return "", fmt.Errorf("gemini response is nil")
+	}
+
+	if trimmed := strings.TrimSpace(resp.Text()); trimmed != "" {
+		return trimmed, nil
+	}
+
+	if len(resp.Candidates) == 0 {
+		return "", fmt.Errorf("gemini returned no candidates")
+	}
+
+	candidate := resp.Candidates[0]
+	if candidate == nil || candidate.Content == nil {
+		return "", fmt.Errorf("gemini candidate contained no content")
+	}
+
+	for _, part := range candidate.Content.Parts {
+		if part == nil || part.Thought {
+			continue
+		}
+		if part.InlineData != nil && len(part.InlineData.Data) > 0 {
+			payload := strings.TrimSpace(string(part.InlineData.Data))
+			if payload != "" {
+				return payload, nil
+			}
+		}
+		if part.Text != "" {
+			if trimmed := strings.TrimSpace(part.Text); trimmed != "" {
+				return trimmed, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("gemini response contained no usable content")
 }
