@@ -212,32 +212,9 @@ func buildSummaryPrompt(digests []channelDigest) string {
 
 	var builder strings.Builder
 	builder.WriteString("あなたはDiscordサーバーの編集者です。以下は過去24時間に投稿されたメッセージ一覧です。最も注目すべき出来事を最大3件選び、日本語の夕刊ハイライトを作成してください。\n")
-	builder.WriteString("\n出力要件:\n")
-	builder.WriteString("- 出力はJSON配列のみとし、各要素は {\"title\": string, \"emoji\": string, \"description\": string, \"link\": string, \"color\": string} 形式のオブジェクトにすること。\n")
-	builder.WriteString("- title・description・linkは必須。emojiは空文字でもよいが、合う絵文字があれば含めること。colorは #RRGGBB 形式で、そのハイライトの雰囲気に合う色を選ぶこと。\n")
-	builder.WriteString("- titleには絵文字をつけないこと。\n")
-	builder.WriteString("- descriptionは1～2文で要点と面白さを簡潔に伝えること。\n")
-	builder.WriteString("- linkには必ず提供されたメッセージURLのうち関連する1件を使用すること。\n")
-	builder.WriteString("- ハイライト数は重要度に応じて1～3件とすること。\n")
-	builder.WriteString("- JSON以外のテキストは一切含めないこと。\n")
-
-	builder.WriteString("\n選定ポリシー:\n")
-	builder.WriteString("- 多様性制約: 原則として同一ユーザー/同一チャンネル/同一トピックの重複を避ける。\n")
-	builder.WriteString("- トピック幅: 可能なら「成果・発表」「交流・雑談等」「小ネタ・ミーム/イベント告知」のように異なる系統から選ぶ。\n")
-	builder.WriteString("- 反応指標: 返信数・リアクション・会話の継続・新規性を重視。ただし数が少なくても話題性が高いものは採用可。\n")
-	builder.WriteString("- 事実は必ず提供メッセージ内からのみ。推測で人物名・数値・成果を追加しない。\n")
-
-	builder.WriteString("\n除外/優先ルール:\n")
-	builder.WriteString("- 除外: 運営・テスト・自動ログ・Bot設定や実装の技術的な詳細。\n")
-	builder.WriteString("- 内輪の短文のみ/リンクだけ/未成熟な下書きは原則不採用。\n")
-
-	builder.WriteString("\n内部評価（出力に含めない）:\n")
-	builder.WriteString("- 各候補を以下の4軸で0〜5点で評価し、総合上位から採用。ただし多様性制約を優先。\n")
-	builder.WriteString("  1) 話題性/盛り上がり  2) 共有価値（みんなが知れて嬉しい）  3) 新規性/影響度  4) 深度/洞察度（議論の質や学びの多さ）\n")
-
-	builder.WriteString("\nトーン/スタイル:\n")
-	builder.WriteString("- 新聞の夕刊風に、軽やかで前向き。冷笑・皮肉・攻撃的な表現は避ける。\n")
-	builder.WriteString("- タイトルは一目で内容が伝わるキャッチーさを優先（語呂・リズム・比喩は可、誤解を招く誇張は不可）。\n")
+	builder.WriteString("出力は必ず次のJSON配列のみとし、整形や説明文を入れないでください。\n")
+	builder.WriteString("例: [{\"title\":\"見出し\",\"emoji\":\"\",\"description\":\"本文\",\"link\":\"https://discord.com/channels/...\",\"color\":\"#b0b0b0\"}]\n")
+	builder.WriteString("各要素には title, emoji, description, link, color のキーを必ず含め、値が無い場合は空文字にしてください。\n")
 
 	for _, digest := range digests {
 		builder.WriteString("\n# ")

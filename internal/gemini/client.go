@@ -12,6 +12,32 @@ import (
 
 const defaultModel = "gemini-2.5-flash"
 
+type highlightDecodeError struct {
+	raw string
+	err error
+}
+
+func (e *highlightDecodeError) Error() string {
+	if e == nil || e.err == nil {
+		return "failed to decode gemini highlights"
+	}
+	return fmt.Sprintf("failed to decode gemini highlights: %v", e.err)
+}
+
+func (e *highlightDecodeError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func (e *highlightDecodeError) RawResponse() string {
+	if e == nil {
+		return ""
+	}
+	return e.raw
+}
+
 // Client wraps the official Gemini Go SDK to generate summaries.
 type Client struct {
 	apiKey string
@@ -66,7 +92,7 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 					"color":       {Type: genai.TypeString},
 				},
 				PropertyOrdering: []string{"title", "emoji", "description", "link", "color"},
-				Required:         []string{"title", "description", "link"},
+				Required:         []string{"title", "emoji", "description", "link", "color"},
 			},
 		},
 	}
@@ -87,7 +113,7 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 
 	highlights, err := commands.ParseHighlights(raw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode gemini highlights: %w", err)
+		return nil, &highlightDecodeError{raw: raw, err: err}
 	}
 
 	return highlights, nil

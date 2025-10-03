@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 )
+
+const geminiMismatchChannelID = "1295592548227616768"
 
 // Summarizer generates structured highlights from the collected messages.
 type Summarizer interface {
@@ -47,12 +50,28 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 
 		prompt := buildSummaryPrompt(digests)
 		if prompt != "" {
-			summaryHighlights, err := summarizer.Summarize(summaryCtx, prompt)
-			if err != nil {
-				log.Printf("failed to summarize messages: %v", err)
-			} else if len(summaryHighlights) > 0 {
+			const maxAttempts = 5
+			for attempts := 0; attempts < maxAttempts && summaryCtx.Err() == nil; attempts++ {
+				summaryHighlights, err := summarizer.Summarize(summaryCtx, prompt)
+				if err != nil {
+					var rawErr interface{ RawResponse() string }
+					if errors.As(err, &rawErr) && rawErr != nil {
+						postGeminiMismatch(session, rawErr.RawResponse())
+						continue
+					}
+					log.Printf("failed to summarize messages: %v", err)
+					break
+				}
+				if len(summaryHighlights) == 0 {
+					log.Printf("failed to summarize messages: gemini returned no highlights")
+					break
+				}
 				highlights = summaryHighlights
 				finalMessage = composeFinalMessage(highlights, fallback)
+				break
+			}
+			if len(highlights) == 0 {
+				log.Printf("failed to summarize messages: gemini response did not match after %d attempts", maxAttempts)
 			}
 		}
 	}
@@ -66,4 +85,18 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 	}
 
 	return finalMessage, highlights, digests, nil
+}
+
+func postGeminiMismatch(session *discordgo.Session, raw string) {
+	raw = strings.TrimSpace(raw)
+	if session == nil || raw == "" {
+		return
+	}
+
+	message := fmt.Sprintf("Gemini APIのレスポンスが合わないため再実行\n%s", raw)
+	message = truncateRunes(message, messageCharBudget)
+
+	if _, err := session.ChannelMessageSend(geminiMismatchChannelID, message); err != nil {
+		log.Printf("failed to post gemini mismatch notice: %v", err)
+	}
 }
