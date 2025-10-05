@@ -49,9 +49,12 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 		}
 
 		prompt := buildSummaryPrompt(digests)
-		if prompt != "" {
+		if prompt == "" {
+			log.Printf("generate summary: prompt is empty, using fallback message")
+		} else {
 			const maxAttempts = 5
 			for attempts := 0; attempts < maxAttempts && summaryCtx.Err() == nil; attempts++ {
+				log.Printf("generate summary: attempt %d/%d (prompt length=%d)", attempts+1, maxAttempts, len(prompt))
 				summaryHighlights, err := summarizer.Summarize(summaryCtx, prompt)
 				if err != nil {
 					var rawErr interface{ RawResponse() string }
@@ -63,15 +66,22 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 					break
 				}
 				if len(summaryHighlights) == 0 {
-					log.Printf("failed to summarize messages: gemini returned no highlights")
-					break
+					log.Printf("failed to summarize messages: gemini returned no highlights (attempt %d/%d)", attempts+1, maxAttempts)
+					postGeminiFailureMessage(session, fmt.Sprintf("Geminiが空のハイライトを返したため再試行します (%d/%d)", attempts+1, maxAttempts))
+					continue
 				}
 				highlights = summaryHighlights
 				finalMessage = composeFinalMessage(highlights, fallback)
+				log.Printf("generate summary: attempt %d/%d succeeded with %d highlights", attempts+1, maxAttempts, len(highlights))
 				break
 			}
 			if len(highlights) == 0 {
 				log.Printf("failed to summarize messages: gemini response did not match after %d attempts", maxAttempts)
+				if trimmedFallback := strings.TrimSpace(fallback); trimmedFallback != "" {
+					postGeminiFailureMessage(session, fmt.Sprintf("Geminiハイライト生成が%d回失敗しました\n%s", maxAttempts, trimmedFallback))
+				} else {
+					postGeminiFailureMessage(session, fmt.Sprintf("Geminiハイライト生成が%d回失敗しました", maxAttempts))
+				}
 			}
 		}
 	}
@@ -89,14 +99,33 @@ func GenerateSummaryForGuild(ctx context.Context, session *discordgo.Session, su
 
 func postGeminiMismatch(session *discordgo.Session, raw string) {
 	raw = strings.TrimSpace(raw)
-	if session == nil || raw == "" {
+	if raw == "" {
 		return
 	}
 
-	message := fmt.Sprintf("Gemini APIのレスポンスが合わないため再実行\n%s", raw)
+	postGeminiFailureMessage(session, fmt.Sprintf("Gemini APIのレスポンスが合わないため再実行\n%s", raw))
+}
+
+func postGeminiFailureMessage(session *discordgo.Session, message string) {
+	if session == nil {
+		return
+	}
+
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return
+	}
+
 	message = truncateRunes(message, messageCharBudget)
+
+	log.Printf("gemini summary failure: %s", message)
 
 	if _, err := session.ChannelMessageSend(geminiMismatchChannelID, message); err != nil {
 		log.Printf("failed to post gemini mismatch notice: %v", err)
 	}
+}
+
+// NotifySummaryFailure exposes failure logging for callers outside this package.
+func NotifySummaryFailure(session *discordgo.Session, message string) {
+	postGeminiFailureMessage(session, message)
 }

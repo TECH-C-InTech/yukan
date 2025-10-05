@@ -3,6 +3,8 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 
 	"google.golang.org/genai"
@@ -64,17 +66,26 @@ func (c *Client) WithModel(model string) *Client {
 
 // Summarize sends the prompt to Gemini and returns structured highlights.
 func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highlight, error) {
-	if strings.TrimSpace(prompt) == "" {
+	trimmedPrompt := strings.TrimSpace(prompt)
+	if trimmedPrompt == "" {
+		log.Printf("gemini summarize: received empty prompt")
 		return nil, fmt.Errorf("prompt is empty")
 	}
 	if c == nil || c.apiKey == "" {
+		log.Printf("gemini summarize: client not configured")
 		return nil, fmt.Errorf("gemini client is not configured")
+	}
+
+	if forceEmptyHighlightsEnabled() {
+		log.Printf("gemini summarize: forcing empty highlights via YUKAN_FORCE_EMPTY_HIGHLIGHTS")
+		return []commands.Highlight{}, nil
 	}
 
 	cfg := &genai.ClientConfig{APIKey: c.apiKey}
 
 	gClient, err := genai.NewClient(ctx, cfg)
 	if err != nil {
+		log.Printf("gemini summarize: failed to create client: %v", err)
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
@@ -97,26 +108,41 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 		},
 	}
 
-	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(prompt), config)
+	log.Printf("gemini summarize: invoking model %s (prompt length=%d)", c.model, len(trimmedPrompt))
+	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(trimmedPrompt), config)
 	if err != nil {
+		log.Printf("gemini summarize: generateContent error: %v", err)
 		return nil, fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
 	raw, err := extractResponsePayload(resp)
 	if err != nil {
+		log.Printf("gemini summarize: failed to extract payload: %v", err)
 		return nil, fmt.Errorf("failed to read gemini response: %w", err)
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
+		log.Printf("gemini summarize: response payload empty")
 		return nil, fmt.Errorf("gemini returned empty summary")
 	}
 
 	highlights, err := commands.ParseHighlights(raw)
 	if err != nil {
+		log.Printf("gemini summarize: failed to parse highlights: %v", err)
 		return nil, &highlightDecodeError{raw: raw, err: err}
 	}
+	log.Printf("gemini summarize: parsed %d highlights", len(highlights))
 
 	return highlights, nil
+}
+
+func forceEmptyHighlightsEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("YUKAN_FORCE_EMPTY_HIGHLIGHTS"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 func extractResponsePayload(resp *genai.GenerateContentResponse) (string, error) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -111,9 +112,10 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 			return
 		}
 
+		target := strings.ToLower(r.URL.Query().Get("target"))
 		guildID := dailySummaryGuildIDProd
 		channelID := dailySummaryChannelIDProd
-		switch strings.ToLower(r.URL.Query().Get("target")) {
+		switch target {
 		case "dev":
 			guildID = dailySummaryGuildIDProd
 			channelID = dailySummaryChannelIDDev
@@ -134,27 +136,25 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 		}
 
 		content, embeds := commands.BuildSummaryMessage(trimmed, highlights, digests)
-		if len(embeds) > 0 {
-			if content != "" {
-				if _, err := session.ChannelMessageSend(channelID, content); err != nil {
-					log.Printf("daily summary: failed to post header message: %v", err)
-					http.Error(w, "failed to post summary", http.StatusInternalServerError)
-					return
-				}
+		if len(embeds) == 0 {
+			commands.NotifySummaryFailure(session, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)\n%s", target, channelID, trimmed))
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if content != "" {
+			if _, err := session.ChannelMessageSend(channelID, content); err != nil {
+				log.Printf("daily summary: failed to post header message: %v", err)
+				http.Error(w, "failed to post summary", http.StatusInternalServerError)
+				return
 			}
-			for _, embed := range embeds {
-				if embed == nil {
-					continue
-				}
-				if _, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
-					log.Printf("daily summary: failed to post embed message: %v", err)
-					http.Error(w, "failed to post summary", http.StatusInternalServerError)
-					return
-				}
+		}
+		for _, embed := range embeds {
+			if embed == nil {
+				continue
 			}
-		} else {
-			if _, err := session.ChannelMessageSend(channelID, trimmed); err != nil {
-				log.Printf("daily summary: failed to post message: %v", err)
+			if _, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
+				log.Printf("daily summary: failed to post embed message: %v", err)
 				http.Error(w, "failed to post summary", http.StatusInternalServerError)
 				return
 			}
