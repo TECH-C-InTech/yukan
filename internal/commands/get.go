@@ -56,6 +56,8 @@ func (c *GetCommand) Handle(session *discordgo.Session, interaction *discordgo.I
 		return
 	}
 
+	workflowStart := time.Now()
+
 	if interaction.GuildID == "" {
 		c.respond(session, interaction, "このコマンドはサーバー内のみで利用できます")
 		return
@@ -74,7 +76,8 @@ func (c *GetCommand) Handle(session *discordgo.Session, interaction *discordgo.I
 		return
 	}
 
-	finalMessage, highlights, digests, err := GenerateSummaryForGuild(context.Background(), session, c.summarizer, interaction.GuildID)
+	summaryCtx := WithSummaryStart(context.Background(), workflowStart)
+	finalMessage, highlights, digests, err := GenerateSummaryForGuild(summaryCtx, session, c.summarizer, interaction.GuildID)
 	if err != nil {
 		msg := fmt.Sprintf("エラーが発生しました: %v", err)
 		log.Printf("/%s command failed: %v", c.Name(), err)
@@ -98,7 +101,10 @@ func (c *GetCommand) Handle(session *discordgo.Session, interaction *discordgo.I
 	}
 	if err != nil {
 		log.Printf("failed to send response: %v", err)
+		return
 	}
+
+	NotifySummaryLog(session, fmt.Sprintf("出力送信完了 (/get, channel=%s, 累計%.2fs)", interaction.ChannelID, time.Since(workflowStart).Seconds()))
 }
 
 func (c *GetCommand) respond(session *discordgo.Session, interaction *discordgo.InteractionCreate, message string) {

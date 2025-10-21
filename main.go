@@ -121,7 +121,8 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 			channelID = dailySummaryChannelIDDev
 		}
 
-		ctx := r.Context()
+		workflowStart := time.Now()
+		ctx := commands.WithSummaryStart(r.Context(), workflowStart)
 		message, highlights, digests, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, guildID)
 		if err != nil {
 			log.Printf("daily summary: failed to generate message: %v", err)
@@ -137,7 +138,8 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 
 		content, embeds := commands.BuildSummaryMessage(trimmed, highlights, digests)
 		if len(embeds) == 0 {
-			commands.NotifySummaryFailure(session, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)\n%s", target, channelID, trimmed))
+			commands.NotifySummaryFailure(session, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)", target, channelID))
+			commands.NotifySummaryLog(session, fmt.Sprintf("出力スキップ (daily-summary, channel=%s, 累計%.2fs)", channelID, time.Since(workflowStart).Seconds()))
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -159,6 +161,8 @@ func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) ht
 				return
 			}
 		}
+
+		commands.NotifySummaryLog(session, fmt.Sprintf("出力送信完了 (daily-summary, channel=%s, 累計%.2fs)", channelID, time.Since(workflowStart).Seconds()))
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("posted"))
