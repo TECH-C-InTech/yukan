@@ -8,7 +8,7 @@ Cloud Scheduler などから `/tasks/daily-summary` を定期実行するだけ�
 Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
                                │
                                ▼
-                       summary.Service
+                  summary.Service
                     ├─ collector (Discord API)
                     ├─ prompt builder
                     ├─ Gemini client
