@@ -3,51 +3,83 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
-	"yukan/internal/app"
-	"yukan/internal/commands"
+	"yukan/internal/config"
 	"yukan/internal/gemini"
-)
-
-const (
-	dailySummaryGuildIDProd   = "1239827951667908668"
-	dailySummaryChannelIDProd = "1418904371579719710"
-	dailySummaryChannelIDDev  = "1417771223433351170"
+	"yukan/internal/notifier"
+	"yukan/internal/summary"
+	"yukan/internal/tasks"
 )
 
 func main() {
-	token := os.Getenv("DISCORD_BOT_TOKEN")
-	if token == "" {
-		log.Fatal("DISCORD_BOT_TOKEN is not set")
-	}
-
-	geminiKey := os.Getenv("GEMINI_API_KEY")
-	if geminiKey == "" {
-		log.Fatal("GEMINI_API_KEY is not set")
-	}
-
-	summarizer := gemini.New(geminiKey)
-	getCommand := commands.NewGetCommand(summarizer)
-
-	botApp, err := app.New(token, getCommand)
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to initialize bot: %v", err)
+		log.Fatal(err)
 	}
-	defer botApp.Close()
 
-	if err := botApp.Start(); err != nil {
-		log.Fatalf("failed to start bot: %v", err)
+	session, err := discordgo.New("Bot " + cfg.DiscordToken)
+	if err != nil {
+		log.Fatalf("failed to create Discord session: %v", err)
 	}
+	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages
+
+	if err := session.Open(); err != nil {
+		log.Fatalf("failed to start Discord session: %v", err)
+	}
+	defer session.Close()
+
+	geminiClient := gemini.New(cfg.GeminiAPIKey)
+	if cfg.GeminiModel != "" {
+		geminiClient = geminiClient.WithModel(cfg.GeminiModel)
+	}
+
+	targetLogChannels := make(map[string]string, len(cfg.Targets))
+	for name, target := range cfg.Targets {
+		if target.LogChannelID != "" {
+			targetLogChannels[name] = target.LogChannelID
+		}
+	}
+
+	note := &notifier.DiscordNotifier{
+		Session:          session,
+		ChannelID:        cfg.LogChannelID,
+		MaxMessageLength: cfg.Summary.MessageCharBudget,
+		TargetChannels:   targetLogChannels,
+	}
+
+	collector := &summary.Collector{
+		Session:        session,
+		Lookback:       cfg.Summary.Lookback,
+		FetchLimit:     cfg.Summary.FetchLimit,
+		MaxConcurrency: cfg.Summary.MaxConcurrency,
+	}
+
+	service := &summary.Service{
+		Collector:  collector,
+		Summarizer: geminiClient,
+		Notifier:   note,
+		Config: summary.Config{
+			MessageCharBudget: cfg.Summary.MessageCharBudget,
+			MaxHighlights:     cfg.Summary.MaxHighlights,
+			MaxAttempts:       cfg.Summary.MaxAttempts,
+		},
+	}
+
+	mux := tasks.NewMux(tasks.Config{
+		Session:        session,
+		SummaryService: service,
+		Notifier:       note,
+		Targets:        cfg.Targets,
+		DefaultTarget:  cfg.DefaultTarget,
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -56,7 +88,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":" + port,
-		Handler: buildHTTPMux(botApp.Session(), summarizer),
+		Handler: mux,
 	}
 
 	serverErrors := make(chan error, 1)
@@ -87,86 +119,4 @@ func main() {
 	}
 
 	log.Println("Shutting down bot")
-}
-
-func buildHTTPMux(session *discordgo.Session, summarizer commands.Summarizer) http.Handler {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("discord bot running"))
-	})
-
-	mux.HandleFunc("/tasks/daily-summary", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		if session == nil {
-			http.Error(w, "discord session not ready", http.StatusServiceUnavailable)
-			return
-		}
-
-		target := strings.ToLower(r.URL.Query().Get("target"))
-		guildID := dailySummaryGuildIDProd
-		channelID := dailySummaryChannelIDProd
-		switch target {
-		case "dev":
-			guildID = dailySummaryGuildIDProd
-			channelID = dailySummaryChannelIDDev
-		}
-
-		workflowStart := time.Now()
-		ctx := commands.WithSummaryStart(r.Context(), workflowStart)
-		message, highlights, digests, err := commands.GenerateSummaryForGuild(ctx, session, summarizer, guildID)
-		if err != nil {
-			log.Printf("daily summary: failed to generate message: %v", err)
-			http.Error(w, "failed to generate summary", http.StatusInternalServerError)
-			return
-		}
-
-		trimmed := strings.TrimSpace(message)
-		if trimmed == "" {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		content, embeds := commands.BuildSummaryMessage(trimmed, highlights, digests)
-		if len(embeds) == 0 {
-			commands.NotifySummaryFailure(session, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)", target, channelID))
-			commands.NotifySummaryLog(session, fmt.Sprintf("出力スキップ (daily-summary, channel=%s, 累計%.2fs)", channelID, time.Since(workflowStart).Seconds()))
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		if content != "" {
-			if _, err := session.ChannelMessageSend(channelID, content); err != nil {
-				log.Printf("daily summary: failed to post header message: %v", err)
-				http.Error(w, "failed to post summary", http.StatusInternalServerError)
-				return
-			}
-		}
-		for _, embed := range embeds {
-			if embed == nil {
-				continue
-			}
-			if _, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
-				log.Printf("daily summary: failed to post embed message: %v", err)
-				http.Error(w, "failed to post summary", http.StatusInternalServerError)
-				return
-			}
-		}
-
-		commands.NotifySummaryLog(session, fmt.Sprintf("出力送信完了 (daily-summary, channel=%s, 累計%.2fs)", channelID, time.Since(workflowStart).Seconds()))
-
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("posted"))
-	})
-
-	return mux
 }

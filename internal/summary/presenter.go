@@ -1,4 +1,4 @@
-package commands
+package summary
 
 import (
 	"encoding/json"
@@ -10,16 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const highlightEmbedColor = 0xb0b0b0
-
-// Highlight represents a single summary item produced by the language model.
-type Highlight struct {
-	Title       string `json:"title"`
-	Emoji       string `json:"emoji"`
-	Description string `json:"description"`
-	Link        string `json:"link"`
-	Color       string `json:"color"`
-}
+const defaultHighlightColor = 0xb0b0b0
 
 // ParseHighlights decodes structured highlight output into sanitized values.
 func ParseHighlights(raw string) ([]Highlight, error) {
@@ -49,22 +40,21 @@ func ParseHighlights(raw string) ([]Highlight, error) {
 	return filtered, nil
 }
 
-func composeFinalMessage(highlights []Highlight, fallback string) string {
+func composeFinalMessage(highlights []Highlight, fallback string, budget int) string {
 	fallback = strings.TrimSpace(fallback)
 	if len(highlights) == 0 {
 		if fallback == "" {
 			return ""
 		}
-		return truncateRunes(fallback, messageCharBudget)
+		return truncateRunes(fallback, budget)
 	}
-
 	date := time.Now().Format("2006年1月2日")
 	header := fmt.Sprintf("[**夕刊**] %s", date)
-	return truncateRunes(header, messageCharBudget)
+	return truncateRunes(header, budget)
 }
 
 // BuildSummaryMessage prepares the Discord message header and embeds from highlights.
-func BuildSummaryMessage(header string, highlights []Highlight, digests []channelDigest) (string, []*discordgo.MessageEmbed) {
+func BuildSummaryMessage(header string, highlights []Highlight, digests []ChannelDigest) (string, []*discordgo.MessageEmbed) {
 	header = strings.TrimSpace(header)
 	if len(highlights) == 0 {
 		return header, nil
@@ -106,7 +96,7 @@ func BuildSummaryMessage(header string, highlights []Highlight, digests []channe
 	return header, embeds
 }
 
-func findMessageByURL(digests []channelDigest, url string) *messageDigest {
+func findMessageByURL(digests []ChannelDigest, url string) *MessageDigest {
 	for i := range digests {
 		for j := range digests[i].Messages {
 			if digests[i].Messages[j].Link == url {
@@ -121,7 +111,7 @@ func resolveHighlightColor(raw string) int {
 	if color, ok := parseHexColor(raw); ok {
 		return color
 	}
-	return highlightEmbedColor
+	return defaultHighlightColor
 }
 
 func parseHexColor(raw string) (int, bool) {

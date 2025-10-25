@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"yukan/internal/commands"
+	"yukan/internal/summary"
 )
 
 const defaultModel = "gemini-2.5-flash"
@@ -65,7 +65,7 @@ func (c *Client) WithModel(model string) *Client {
 }
 
 // Summarize sends the prompt to Gemini and returns structured highlights.
-func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highlight, error) {
+func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highlight, error) {
 	trimmedPrompt := strings.TrimSpace(prompt)
 	if trimmedPrompt == "" {
 		log.Printf("gemini summarize: received empty prompt")
@@ -78,7 +78,7 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 
 	if forceEmptyHighlightsEnabled() {
 		log.Printf("gemini summarize: forcing empty highlights via YUKAN_FORCE_EMPTY_HIGHLIGHTS")
-		return []commands.Highlight{}, nil
+		return []summary.Highlight{}, nil
 	}
 
 	cfg := &genai.ClientConfig{APIKey: c.apiKey}
@@ -126,7 +126,7 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]commands.Highl
 		return nil, fmt.Errorf("gemini returned empty summary")
 	}
 
-	highlights, err := commands.ParseHighlights(raw)
+	highlights, err := summary.ParseHighlights(raw)
 	if err != nil {
 		log.Printf("gemini summarize: failed to parse highlights: %v", err)
 		return nil, &highlightDecodeError{raw: raw, err: err}
