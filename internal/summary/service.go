@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -15,6 +17,11 @@ import (
 type summaryContextKey string
 
 const summaryStartKey summaryContextKey = "summary-start"
+
+var (
+	infoRand   = rand.New(rand.NewSource(time.Now().UnixNano()))
+	infoRandMu sync.Mutex
+)
 
 // WithSummaryStart stores the workflow trigger timestamp in the provided context.
 func WithSummaryStart(ctx context.Context, start time.Time) context.Context {
@@ -171,6 +178,14 @@ func (s *Service) maxAttempts() int {
 func (s *Service) info(ctx context.Context, message string) {
 	if s != nil && s.Notifier != nil {
 		s.Notifier.Info(ctx, message)
+
+		infoRandMu.Lock()
+		isOddity := infoRand.Intn(20) == 0
+		infoRandMu.Unlock()
+
+		if isOddity {
+			s.Notifier.Info(ctx, "👁️👁️")
+		}
 	} else {
 		log.Printf("summary info: %s", message)
 	}
