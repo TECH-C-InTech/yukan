@@ -41,6 +41,9 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 		return empty, fmt.Errorf("チャンネル一覧の取得に失敗しました: %w", err)
 	}
 
+	// @everyone role ID is the same as guild ID
+	everyoneRoleID := guildID
+
 	now := time.Now()
 	cutoff := now.Add(-c.lookback())
 
@@ -55,6 +58,11 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 			return
 		}
 		if _, exists := seen[ch.ID]; exists {
+			return
+		}
+		// Check if @everyone can view this channel
+		if !canEveryoneViewChannel(ch, everyoneRoleID) {
+			log.Printf("collector: skipping channel %s (%s) - not viewable by @everyone", ch.Name, ch.ID)
 			return
 		}
 		seen[ch.ID] = struct{}{}
@@ -76,6 +84,10 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 
 	for _, ch := range baseChannels {
 		if !isThreadParentChannel(ch.Type) {
+			continue
+		}
+		// Skip if @everyone can't view this channel
+		if !canEveryoneViewChannel(ch, everyoneRoleID) {
 			continue
 		}
 		threads, err := c.Session.ThreadsArchived(ch.ID, nil, 100)
@@ -385,4 +397,32 @@ func extractContent(msg *discordgo.Message) string {
 	}
 
 	return sanitizeContent(content)
+}
+
+// canEveryoneViewChannel checks if @everyone role has permission to view and read messages in a channel
+func canEveryoneViewChannel(ch *discordgo.Channel, everyoneRoleID string) bool {
+	if ch == nil {
+		return false
+	}
+
+	// https://discord.com/developers/docs/topics/permissions
+	// Required permissions: ViewChannel and ReadMessageHistory
+	const (
+		permissionViewChannel        = 0x0000000000000400 // 1024
+		permissionReadMessageHistory = 0x0000000000010000 // 65536
+	)
+	requiredPerms := int64(permissionViewChannel | permissionReadMessageHistory)
+
+	// Check permission overwrites for @everyone role
+	var denyPerms int64
+	for _, overwrite := range ch.PermissionOverwrites {
+		if overwrite.Type == discordgo.PermissionOverwriteTypeRole && overwrite.ID == everyoneRoleID {
+			denyPerms = overwrite.Deny
+			break
+		}
+	}
+
+	// Only block if explicitly denied
+	// If not denied, assume the channel is accessible (default Discord behavior)
+	return (denyPerms & requiredPerms) == 0
 }
