@@ -1,6 +1,6 @@
 .PHONY: build-image deploy grant-deploy-access
 
-PROJECT_ID ?= yukan-472703
+PROJECT_ID ?= yukan-discord-bot
 REGION ?= asia-northeast1
 SERVICE ?= discord-yukan
 REPOSITORY ?= yukan-bot

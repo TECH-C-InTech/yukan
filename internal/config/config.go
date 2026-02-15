@@ -53,8 +53,8 @@ const (
 // Load reads configuration from environment variables.
 func Load() (Config, error) {
 	cfg := Config{
-		DiscordToken: os.Getenv("DISCORD_BOT_TOKEN"),
-		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
+		DiscordToken: strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")),
+		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
 		GeminiModel:  strings.TrimSpace(os.Getenv("GEMINI_MODEL")),
 		LogChannelID: strings.TrimSpace(os.Getenv("YUKAN_LOG_CHANNEL_ID")),
 		Summary: SummaryConfig{
