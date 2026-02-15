@@ -51,3 +51,29 @@ Google Cloud Run を想定しており、`Makefile` でビルド・デプロイ�
 make deploy
 ```
 Secrets (`DISCORD_BOT_TOKEN`, `GEMINI_API_KEY`) は Secret Manager で管理し、`--set-secrets` オプションに合わせて指定してください。
+
+## フロー図
+
+```mermaid
+flowchart LR
+    subgraph gcp [GCP Project]
+        SM[Secret Manager]
+        AR[Artifact Registry]
+        CB[Cloud Build]
+        CR[Cloud Run]
+        Sched[Cloud Scheduler]
+    end
+
+    subgraph external [外部]
+        Discord[Discord API]
+        GeminiAPI[Gemini API]
+    end
+
+    User[手動 make deploy] --> CB
+    CB --> AR
+    AR --> CR
+    SM --> CR
+    Sched -->|POST /tasks/daily-summary| CR
+    CR --> Discord
+    CR --> GeminiAPI
+```
