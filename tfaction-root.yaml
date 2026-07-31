@@ -1,0 +1,24 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/suzuki-shunsuke/tfaction/refs/heads/latest/schema/tfaction-root.json
+plan_workflow_name: terraform-plan.yaml
+
+target_groups:
+  - working_directory: infra/
+    target: infra
+    gcp_workload_identity_provider: projects/547280806905/locations/global/workloadIdentityPools/github/providers/github-oidc
+    terraform_plan_config:
+      gcp_service_account: yukan-tfaction-plan@yukan-discord-bot.iam.gserviceaccount.com
+    terraform_apply_config:
+      gcp_service_account: yukan-tfaction-apply@yukan-discord-bot.iam.gserviceaccount.com
+
+terraform_command: terraform
+
+# 1人メンテのため follow-up PR は作らない (GitHub App 不要の構成)
+skip_create_pr: true
+
+tflint:
+  enabled: true
+  fix: false
+
+trivy:
+  enabled: false
