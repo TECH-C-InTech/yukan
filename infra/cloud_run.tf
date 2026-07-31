@@ -34,6 +34,9 @@ resource "google_cloud_run_v2_service" "yukan" {
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
+  # stg は一時環境で enable_staging=false により破棄されるため保護しない
+  deletion_protection = each.key == "prod"
+
   template {
     service_account                  = google_service_account.run.email
     timeout                          = "900s"
@@ -95,5 +98,9 @@ resource "google_cloud_run_v2_service" "yukan" {
     ]
   }
 
-  depends_on = [google_project_service.apis]
+  # ランタイム SA がシークレットを読めるようになってからリビジョンを作る
+  depends_on = [
+    google_project_service.apis,
+    google_secret_manager_secret_iam_member.run_secret_access,
+  ]
 }
