@@ -1,3 +1,4 @@
+// yukan は Discord サーバーの1日を Gemini で要約して夕刊として投稿するボット。
 package main
 
 import (
@@ -33,7 +34,7 @@ func main() {
 
 	healthz := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
@@ -51,10 +52,14 @@ func main() {
 		h.ServeHTTP(w, r)
 	})
 
-	server := &http.Server{Addr: ":" + port, Handler: proxy}
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           proxy,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("HTTP server listening on :%s", port)
+		log.Printf("HTTP server listening on :%s", port) //nolint:gosec // PORT は運用者が設定する環境変数で外部入力ではない
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
@@ -73,7 +78,7 @@ func main() {
 			if err := session.Open(); err != nil {
 				log.Printf("failed to start Discord session: %v", err)
 			} else {
-				defer session.Close()
+				defer func() { _ = session.Close() }()
 				geminiClient := gemini.New(cfg.GeminiAPIKey)
 				if cfg.GeminiModel != "" {
 					geminiClient = geminiClient.WithModel(cfg.GeminiModel)

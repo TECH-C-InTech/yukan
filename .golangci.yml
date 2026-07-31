@@ -1,0 +1,8 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+    - gosec
+    - misspell
+    - revive
+    - unparam

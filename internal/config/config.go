@@ -1,3 +1,4 @@
+// Package config は環境変数からボットの実行時設定を読み込み検証する。
 package config
 
 import (
