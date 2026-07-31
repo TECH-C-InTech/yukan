@@ -1,2 +1,3 @@
 [tools]
-golang = "1.23"
+golang = "1.26"
+aqua = "2.59.1"
