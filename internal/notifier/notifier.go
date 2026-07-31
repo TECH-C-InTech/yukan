@@ -1,3 +1,4 @@
+// Package notifier は運用者向けの Discord チャンネル通知を提供する。
 package notifier
 
 import (

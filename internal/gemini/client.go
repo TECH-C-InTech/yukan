@@ -1,3 +1,4 @@
+// Package gemini は Gemini API を使った要約生成のアダプタを提供する。
 package gemini
 
 import (

@@ -8,16 +8,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const messageLineCharLimit = 120
-
-func truncateRunes(input string, max int) string {
-	if max <= 0 {
+func truncateRunes(input string, limit int) string {
+	if limit <= 0 {
 		return ""
 	}
-	if utf8.RuneCountInString(input) <= max {
+	if utf8.RuneCountInString(input) <= limit {
 		return input
 	}
-	return string([]rune(input)[:max]) + "…"
+	return string([]rune(input)[:limit]) + "…"
 }
 
 func sanitizeContent(input string) string {

@@ -1,3 +1,4 @@
+// Package summary は Discord メッセージの収集・要約・夕刊メッセージの組み立てを担う。
 package summary
 
 import (
@@ -19,7 +20,7 @@ type summaryContextKey string
 const summaryStartKey summaryContextKey = "summary-start"
 
 var (
-	infoRand   = rand.New(rand.NewSource(time.Now().UnixNano()))
+	infoRand   = rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 演出用の乱数で暗号用途ではない
 	infoRandMu sync.Mutex
 )
 

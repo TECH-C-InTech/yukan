@@ -1,3 +1,4 @@
+// Package tasks は Cloud Scheduler から起動される HTTP エンドポイントを提供する。
 package tasks
 
 import (
