@@ -73,6 +73,8 @@ resource "google_project_iam_member" "tfaction_apply_roles" {
     # editor に含まれない setIamPolicy 系
     "roles/secretmanager.admin",
     "roles/run.admin",
+    "roles/artifactregistry.admin",
+    "roles/iam.serviceAccountAdmin",
   ])
 
   project = var.project_id
