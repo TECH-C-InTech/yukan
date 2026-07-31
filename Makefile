@@ -1,4 +1,19 @@
-.PHONY: build-image deploy grant-deploy-access
+.PHONY: run test lint vet fmt build-image deploy grant-deploy-access
+
+run:
+	go run .
+
+test:
+	go test ./... -race -cover
+
+lint:
+	golangci-lint run
+
+vet:
+	go vet ./...
+
+fmt:
+	gofmt -l -w .
 
 PROJECT_ID ?= yukan-discord-bot
 REGION ?= asia-northeast1
