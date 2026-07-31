@@ -13,6 +13,26 @@ resource "google_cloud_run_v2_service_iam_binding" "invoker" {
   )
 }
 
+# CD (yukan-deployer@): イメージ push + Cloud Run デプロイのみ
+resource "google_project_iam_member" "deployer_run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = google_service_account.deployer.member
+}
+
+resource "google_artifact_registry_repository_iam_member" "deployer_ar_writer" {
+  repository = google_artifact_registry_repository.yukan.name
+  role       = "roles/artifactregistry.writer"
+  member     = google_service_account.deployer.member
+}
+
+# デプロイ時にランタイム SA を紐付けるための actAs (yukan-run@ 限定)
+resource "google_service_account_iam_member" "deployer_act_as_run" {
+  service_account_id = google_service_account.run.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = google_service_account.deployer.member
+}
+
 # ランタイム SA はシークレット2つの参照のみ (プロジェクトレベル権限なし)
 resource "google_secret_manager_secret_iam_member" "run_secret_access" {
   for_each = {
