@@ -2,6 +2,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/suzuki-shunsuke/tfaction/refs/heads/latest/schema/tfaction-root.json
 plan_workflow_name: terraform-plan.yaml
 
+available_providers:
+  - name: registry.terraform.io/hashicorp/google
+
 target_groups:
   - working_directory: infra
     target: infra
