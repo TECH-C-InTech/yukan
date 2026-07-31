@@ -19,13 +19,13 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 ```
 
 ## セットアップ
-1. Go 1.23+ と `gcloud` を用意します。
+1. [mise](https://mise.jdx.dev/) を用意し、`mise install` で Go と aqua を、`aqua i` で開発用 CLI ツールをインストールします。
 2. Discord Bot Token・Gemini API Key を取得し、Secret Manager などに保存します。
-3. `.env` などで必要な環境変数を設定し、ローカルで起動できます:
+3. 環境変数を設定してローカルで起動します(`.env` ファイルの自動読み込みは無いため、`export` するか direnv などを利用してください):
    ```bash
    export DISCORD_BOT_TOKEN=xxxx
    export GEMINI_API_KEY=yyyy
-   go run ./...
+   make run
    ```
 4. Bot を動かしたまま `curl -X POST http://localhost:8080/tasks/daily-summary?target=dev` を実行すると dev チャンネル向け夕刊を投稿します。
 
@@ -44,6 +44,8 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 | `YUKAN_SUMMARY_MESSAGE_BUDGET` |  | 見出しメッセージ最大文字数 (既定 1800) |
 | `YUKAN_SUMMARY_MAX_HIGHLIGHTS` |  | Gemini に要求する最大ハイライト数 (既定 3) |
 | `YUKAN_SUMMARY_MAX_ATTEMPTS` |  | Gemini 呼び出しリトライ回数 (既定 5) |
+| `YUKAN_SUMMARY_MAX_CONCURRENCY` |  | チャンネル収集の並列数 |
+| `YUKAN_FORCE_EMPTY_HIGHLIGHTS` |  | テスト・デバッグ用: `true` で Gemini を呼ばず空ハイライトを返す |
 
 ## デプロイ
 Google Cloud Run を想定しており、`Makefile` でビルド・デプロイできます。
