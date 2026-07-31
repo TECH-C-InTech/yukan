@@ -92,5 +92,5 @@ jobs:
       - name: Plan
         uses: suzuki-shunsuke/tfaction@d0d52eb8b2ff13d6e27ac9653d038df384e58827 # v2.0.5
         with:
-          action: terraform-plan
+          action: plan
           github_token: ${{ github.token }}
