@@ -64,3 +64,4 @@ gcloud run services update-traffic discord-yukan --region asia-northeast1 --proj
 - `.terraform.lock.hcl` は `terraform providers lock -platform=...` で全プラットフォーム分をコミットしておく (CI からの push 権限が不要になる)
 - **plan ワークフローの完了前にマージしない** — apply は PR の plan 結果 (Artifact) をそのまま適用するため、plan 未完了でマージすると `Artifact not found` で落ちる。ブランチ保護で plan を必須チェックにするのが確実
 - 作成に失敗して tainted になった Cloud Run サービスは `deletion_protection` の鶏卵問題で replace できない → `terraform untaint` して in-place 更新に切り替える
+- apply SA へのロール付与とそのロールを使う操作を同じ apply に入れると IAM 伝播ラグで失敗する → 次の PR で再適用すれば通る
