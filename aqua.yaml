@@ -1,0 +1,21 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/aqua-yaml.json
+# aqua - Declarative CLI Version Manager
+# https://aquaproj.github.io/
+checksum:
+  enabled: true
+  require_checksum: true
+  supported_envs:
+  - all
+registries:
+- type: standard
+  ref: v4.545.0 # renovate: depName=aquaproj/aqua-registry
+packages:
+- name: golangci/golangci-lint@v2.12.2
+- name: hashicorp/terraform@v1.15.8
+- name: terraform-linters/tflint@v0.64.0
+- name: hadolint/hadolint@v2.15.0
+- name: rhysd/actionlint@v1.7.12
+- name: suzuki-shunsuke/pinact@v4.1.1
+- name: suzuki-shunsuke/tfcmt@v4.14.17
+- name: zizmorcore/zizmor@v1.28.0
