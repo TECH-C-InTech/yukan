@@ -2,8 +2,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/suzuki-shunsuke/tfaction/refs/heads/latest/schema/tfaction-root.json
 plan_workflow_name: terraform-plan.yaml
 
+available_providers:
+  - name: registry.terraform.io/hashicorp/google
+
 target_groups:
-  - working_directory: infra/
+  - working_directory: infra
     target: infra
     gcp_workload_identity_provider: projects/547280806905/locations/global/workloadIdentityPools/github/providers/github-oidc
     terraform_plan_config:
