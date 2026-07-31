@@ -70,6 +70,9 @@ resource "google_project_iam_member" "tfaction_apply_roles" {
     "roles/editor",
     "roles/resourcemanager.projectIamAdmin",
     "roles/iam.workloadIdentityPoolAdmin",
+    # editor に含まれない setIamPolicy 系
+    "roles/secretmanager.admin",
+    "roles/run.admin",
   ])
 
   project = var.project_id
