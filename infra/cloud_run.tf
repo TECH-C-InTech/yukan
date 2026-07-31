@@ -104,3 +104,5 @@ resource "google_cloud_run_v2_service" "yukan" {
     google_secret_manager_secret_iam_member.run_secret_access,
   ]
 }
+
+# apply トリガー用コメント: stg 再作成 (2026-07-31)
