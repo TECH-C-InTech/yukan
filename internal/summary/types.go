@@ -62,6 +62,8 @@ type Result struct {
 	WorkflowStart time.Time
 	CompletedAt   time.Time
 	Publishable   bool
+	// Posted は Run で実際に Discord へ投稿されたかを示す
+	Posted bool
 }
 
 // Config controls summary generation behavior.

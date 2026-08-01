@@ -80,6 +80,7 @@ func run() error {
 			MaxConcurrency: cfg.Summary.MaxConcurrency,
 		},
 		Summarizer: geminiClient,
+		Publisher:  &discord.Publisher{Session: session},
 		Notifier:   note,
 		Config: summary.Config{
 			MessageCharBudget: cfg.Summary.MessageCharBudget,

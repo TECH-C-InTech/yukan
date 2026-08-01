@@ -16,15 +16,9 @@ import (
 	"yukan/internal/summary"
 )
 
-// summaryGenerator は夕刊生成を抽象化する (テストでフェイクを注入する)。
-type summaryGenerator interface {
-	Generate(ctx context.Context, req summary.Request) (summary.Result, error)
-}
-
-// messageSender は Discord への投稿に使う discordgo.Session のサブセット。
-type messageSender interface {
-	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
-	ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error)
+// summaryRunner は夕刊の生成 + 投稿を抽象化する (テストでフェイクを注入する)。
+type summaryRunner interface {
+	Run(ctx context.Context, req summary.Request) (summary.Result, error)
 }
 
 // Config wires the HTTP handlers.
@@ -50,9 +44,6 @@ func NewMux(cfg Config) http.Handler {
 	if cfg.SummaryService != nil {
 		handler.service = cfg.SummaryService
 	}
-	if cfg.Session != nil {
-		handler.sender = cfg.Session
-	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handler.handleHealthz)
@@ -66,8 +57,7 @@ func NewMux(cfg Config) http.Handler {
 type Handler struct {
 	session       *discordgo.Session
 	botID         string
-	sender        messageSender
-	service       summaryGenerator
+	service       summaryRunner
 	notifier      notifier.Notifier
 	targets       map[string]config.Target
 	defaultTarget string
@@ -88,7 +78,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.service == nil || h.sender == nil {
+	if h.service == nil {
 		http.Error(w, "service not ready", http.StatusServiceUnavailable)
 		return
 	}
@@ -120,54 +110,21 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 	ctx := summary.WithSummaryStart(r.Context(), time.Now())
 	ctx = notifier.WithTarget(ctx, targetName)
 
-	result, err := h.service.Generate(ctx, summary.Request{
+	result, err := h.service.Run(ctx, summary.Request{
 		TargetName: targetName,
 		GuildID:    sourceGuildID,
 		ChannelID:  target.ChannelID,
 		BotID:      botID,
 	})
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to generate summary", "target", targetName, "error", err)
-		http.Error(w, "failed to generate summary", http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "daily summary failed", "target", targetName, "error", err)
+		http.Error(w, "failed to run summary", http.StatusInternalServerError)
 		return
 	}
 
-	trimmed := strings.TrimSpace(result.Content)
-	if trimmed == "" {
+	if !result.Posted {
 		w.WriteHeader(http.StatusNoContent)
 		return
-	}
-
-	if !result.Publishable {
-		if h.notifier != nil {
-			h.notifier.Error(ctx, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)", targetName, target.ChannelID))
-		}
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	if trimmed != "" {
-		if _, err := h.sender.ChannelMessageSend(target.ChannelID, trimmed); err != nil {
-			slog.ErrorContext(r.Context(), "failed to post summary header", "target", targetName, "channel_id", target.ChannelID, "error", err)
-			http.Error(w, "failed to post summary", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	for _, embed := range result.Embeds {
-		if embed == nil {
-			continue
-		}
-		if _, err := h.sender.ChannelMessageSendComplex(target.ChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
-			slog.ErrorContext(r.Context(), "failed to post summary embed", "target", targetName, "channel_id", target.ChannelID, "error", err)
-			http.Error(w, "failed to post summary", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	if h.notifier != nil {
-		elapsed := time.Since(result.WorkflowStart).Seconds()
-		h.notifier.Info(ctx, fmt.Sprintf("出力送信完了 (target=%s channel=%s, 累計%.2fs)", targetName, target.ChannelID, elapsed))
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
