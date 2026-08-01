@@ -30,6 +30,7 @@ type messageSender interface {
 // Config wires the HTTP handlers.
 type Config struct {
 	Session        *discordgo.Session
+	BotID          string
 	SummaryService *summary.Service
 	Notifier       notifier.Notifier
 	Targets        map[string]config.Target
@@ -40,6 +41,7 @@ type Config struct {
 func NewMux(cfg Config) http.Handler {
 	handler := &Handler{
 		session:       cfg.Session,
+		botID:         cfg.BotID,
 		notifier:      cfg.Notifier,
 		targets:       cfg.Targets,
 		defaultTarget: cfg.DefaultTarget,
@@ -63,6 +65,7 @@ func NewMux(cfg Config) http.Handler {
 // Handler processes task invocations.
 type Handler struct {
 	session       *discordgo.Session
+	botID         string
 	sender        messageSender
 	service       summaryGenerator
 	notifier      notifier.Notifier
@@ -104,8 +107,8 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	botID := ""
-	if h.session != nil && h.session.State != nil && h.session.State.User != nil {
+	botID := h.botID
+	if botID == "" && h.session != nil && h.session.State != nil && h.session.State.User != nil {
 		botID = h.session.State.User.ID
 	}
 
