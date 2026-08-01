@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -119,7 +119,7 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 				}
 				highlights = summaryHighlights
 				finalMessage = composeFinalMessage(highlights, collectorResult.FallbackText, s.Config.MessageCharBudget)
-				log.Printf("summary: Gemini attempt %d/%d succeeded with %d highlights", attempt, maxAttempts, len(highlights))
+				slog.InfoContext(ctx, "gemini attempt succeeded", "attempt", attempt, "max_attempts", maxAttempts, "highlights", len(highlights))
 				break
 			}
 			if len(highlights) == 0 {
@@ -169,7 +169,7 @@ func (s *Service) info(ctx context.Context, message string) {
 			s.Notifier.Info(ctx, "👁️👁️")
 		}
 	} else {
-		log.Printf("summary info: %s", message)
+		slog.InfoContext(ctx, message)
 	}
 }
 
@@ -181,7 +181,7 @@ func (s *Service) error(ctx context.Context, message string) {
 	if s != nil && s.Notifier != nil {
 		s.Notifier.Error(ctx, message)
 	} else {
-		log.Printf("summary error: %s", message)
+		slog.ErrorContext(ctx, message)
 	}
 }
 

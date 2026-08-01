@@ -4,7 +4,7 @@ package gemini
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -69,16 +69,16 @@ func (c *Client) WithModel(model string) *Client {
 func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highlight, error) {
 	trimmedPrompt := strings.TrimSpace(prompt)
 	if trimmedPrompt == "" {
-		log.Printf("gemini summarize: received empty prompt")
+		slog.WarnContext(ctx, "gemini prompt is empty")
 		return nil, fmt.Errorf("prompt is empty")
 	}
 	if c == nil || c.apiKey == "" {
-		log.Printf("gemini summarize: client not configured")
+		slog.ErrorContext(ctx, "gemini client is not configured")
 		return nil, fmt.Errorf("gemini client is not configured")
 	}
 
 	if forceEmptyHighlightsEnabled() {
-		log.Printf("gemini summarize: forcing empty highlights via YUKAN_FORCE_EMPTY_HIGHLIGHTS")
+		slog.WarnContext(ctx, "forcing empty highlights via YUKAN_FORCE_EMPTY_HIGHLIGHTS")
 		return []summary.Highlight{}, nil
 	}
 
@@ -86,7 +86,7 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highli
 
 	gClient, err := genai.NewClient(ctx, cfg)
 	if err != nil {
-		log.Printf("gemini summarize: failed to create client: %v", err)
+		slog.ErrorContext(ctx, "failed to create gemini client", "error", err)
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
@@ -109,30 +109,30 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highli
 		},
 	}
 
-	log.Printf("gemini summarize: invoking model %s (prompt length=%d)", c.model, len(trimmedPrompt))
+	slog.InfoContext(ctx, "invoking gemini", "model", c.model, "prompt_length", len(trimmedPrompt))
 	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(trimmedPrompt), config)
 	if err != nil {
-		log.Printf("gemini summarize: generateContent error: %v", err)
+		slog.ErrorContext(ctx, "gemini generateContent failed", "model", c.model, "error", err)
 		return nil, fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
 	raw, err := extractResponsePayload(resp)
 	if err != nil {
-		log.Printf("gemini summarize: failed to extract payload: %v", err)
+		slog.ErrorContext(ctx, "failed to extract gemini payload", "error", err)
 		return nil, fmt.Errorf("failed to read gemini response: %w", err)
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		log.Printf("gemini summarize: response payload empty")
+		slog.WarnContext(ctx, "gemini returned empty payload")
 		return nil, fmt.Errorf("gemini returned empty summary")
 	}
 
 	highlights, err := summary.ParseHighlights(raw)
 	if err != nil {
-		log.Printf("gemini summarize: failed to parse highlights: %v", err)
+		slog.ErrorContext(ctx, "failed to parse gemini highlights", "error", err)
 		return nil, &highlightDecodeError{raw: raw, err: err}
 	}
-	log.Printf("gemini summarize: parsed %d highlights", len(highlights))
+	slog.InfoContext(ctx, "parsed gemini highlights", "count", len(highlights))
 
 	return highlights, nil
 }

@@ -3,7 +3,7 @@ package summary
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -71,7 +71,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 			appendChannel(th)
 		}
 	} else if err != nil {
-		log.Printf("collector: failed to fetch active threads: %v", err)
+		slog.WarnContext(ctx, "failed to fetch active threads", "error", err)
 	}
 
 	for _, ch := range baseChannels {
@@ -80,7 +80,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 		}
 		threads, err := c.Session.ThreadsArchived(ch.ID, nil, 100)
 		if err != nil {
-			log.Printf("collector: failed to fetch archived threads for channel %s: %v", ch.ID, err)
+			slog.WarnContext(ctx, "failed to fetch archived threads", "channel_id", ch.ID, "error", err)
 			continue
 		}
 		if threads == nil {
@@ -198,7 +198,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 
 		messages, err := c.Session.ChannelMessages(ch.ID, c.FetchLimit, beforeID, "", "")
 		if err != nil {
-			log.Printf("collector: failed to fetch messages for channel %s: %v", ch.ID, err)
+			slog.WarnContext(ctx, "failed to fetch channel messages", "channel_id", ch.ID, "error", err)
 			failedFetch = true
 			break
 		}
