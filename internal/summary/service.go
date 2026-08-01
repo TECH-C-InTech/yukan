@@ -6,9 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -18,11 +17,6 @@ import (
 type summaryContextKey string
 
 const summaryStartKey summaryContextKey = "summary-start"
-
-var (
-	infoRand   = rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 演出用の乱数で暗号用途ではない
-	infoRandMu sync.Mutex
-)
 
 // WithSummaryStart stores the workflow trigger timestamp in the provided context.
 func WithSummaryStart(ctx context.Context, start time.Time) context.Context {
@@ -44,12 +38,20 @@ func workflowStartFromContext(ctx context.Context) time.Time {
 	return time.Now()
 }
 
+// MessageCollector は要約対象メッセージの収集を抽象化する (テストでフェイクを注入する)。
+type MessageCollector interface {
+	Collect(ctx context.Context, guildID, botID string) (CollectorResult, error)
+}
+
 // Service coordinates collectors, LLMs, and presenters to build summaries.
 type Service struct {
-	Collector  *Collector
+	Collector  MessageCollector
 	Summarizer Summarizer
 	Notifier   notifier.Notifier
 	Config     Config
+
+	// Oddity は info 通知に 👁️👁️ を添えるかを決める。nil なら 1/20 の乱数
+	Oddity func() bool
 }
 
 // Generate produces a summary result for the target guild.
@@ -159,16 +161,20 @@ func (s *Service) info(ctx context.Context, message string) {
 	if s != nil && s.Notifier != nil {
 		s.Notifier.Info(ctx, message)
 
-		infoRandMu.Lock()
-		isOddity := infoRand.Intn(20) == 0
-		infoRandMu.Unlock()
-
-		if isOddity {
+		oddity := s.Oddity
+		if oddity == nil {
+			oddity = defaultOddity
+		}
+		if oddity() {
 			s.Notifier.Info(ctx, "👁️👁️")
 		}
 	} else {
 		log.Printf("summary info: %s", message)
 	}
+}
+
+func defaultOddity() bool {
+	return rand.IntN(20) == 0 //nolint:gosec // 演出用の乱数で暗号用途ではない
 }
 
 func (s *Service) error(ctx context.Context, message string) {
