@@ -16,6 +16,8 @@ type Config struct {
 	GeminiAPIKey string
 	GeminiModel  string
 
+	Port string
+
 	LogChannelID string
 
 	Summary SummaryConfig
@@ -57,6 +59,7 @@ func Load() (Config, error) {
 		DiscordToken: strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")),
 		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
 		GeminiModel:  strings.TrimSpace(os.Getenv("GEMINI_MODEL")),
+		Port:         strings.TrimSpace(os.Getenv("PORT")),
 		LogChannelID: strings.TrimSpace(os.Getenv("YUKAN_LOG_CHANNEL_ID")),
 		Summary: SummaryConfig{
 			Lookback:          time.Duration(defaultLookbackHours) * time.Hour,
@@ -69,6 +72,9 @@ func Load() (Config, error) {
 		DefaultTarget: "prod",
 	}
 
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
 	if cfg.DiscordToken == "" {
 		return Config{}, fmt.Errorf("DISCORD_BOT_TOKEN is not set")
 	}

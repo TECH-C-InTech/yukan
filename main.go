@@ -4,17 +4,18 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
 	"yukan/internal/config"
+	"yukan/internal/discord"
 	"yukan/internal/gemini"
 	"yukan/internal/notifier"
 	"yukan/internal/summary"
@@ -22,127 +23,105 @@ import (
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	if err := run(); err != nil {
+		// 初期化失敗は即終了する。Cloud Run 側でリビジョンが unhealthy になり、
+		// 壊れたデプロイが「健康な503」に見える事故を防ぐ
+		log.Fatalf("startup failed: %v", err)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("config load failed: %w", err)
 	}
 
-	// Cloud Run: ポートを即座に listen するため、サーバーを最優先で起動
-	var realHandler http.Handler
-	var handlerMu sync.RWMutex
-	var ready bool
+	// gateway (WebSocket) は開かず REST のみ使用する。起動が即時になり、
+	// スケールゼロ運用と噛み合う
+	session, err := discordgo.New("Bot " + cfg.DiscordToken)
+	if err != nil {
+		return fmt.Errorf("failed to create Discord session: %w", err)
+	}
 
-	healthz := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("ok"))
-	})
-	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			healthz.ServeHTTP(w, r)
-			return
+	botID, err := discord.BotUserID(session)
+	if err != nil {
+		return err
+	}
+
+	geminiClient := gemini.New(cfg.GeminiAPIKey)
+	if cfg.GeminiModel != "" {
+		geminiClient = geminiClient.WithModel(cfg.GeminiModel)
+	}
+
+	targetLogChannels := make(map[string]string, len(cfg.Targets))
+	for name, target := range cfg.Targets {
+		if target.LogChannelID != "" {
+			targetLogChannels[name] = target.LogChannelID
 		}
-		handlerMu.RLock()
-		h := realHandler
-		ok := ready
-		handlerMu.RUnlock()
-		if !ok || h == nil {
-			http.Error(w, "service initializing", http.StatusServiceUnavailable)
-			return
-		}
-		h.ServeHTTP(w, r)
+	}
+	note := &notifier.DiscordNotifier{
+		Session:          session,
+		ChannelID:        cfg.LogChannelID,
+		MaxMessageLength: cfg.Summary.MessageCharBudget,
+		TargetChannels:   targetLogChannels,
+	}
+
+	service := &summary.Service{
+		Collector: &summary.Collector{
+			Session:        session,
+			Lookback:       cfg.Summary.Lookback,
+			FetchLimit:     cfg.Summary.FetchLimit,
+			MaxConcurrency: cfg.Summary.MaxConcurrency,
+		},
+		Summarizer: geminiClient,
+		Notifier:   note,
+		Config: summary.Config{
+			MessageCharBudget: cfg.Summary.MessageCharBudget,
+			MaxHighlights:     cfg.Summary.MaxHighlights,
+			MaxAttempts:       cfg.Summary.MaxAttempts,
+		},
+	}
+
+	mux := tasks.NewMux(tasks.Config{
+		Session:        session,
+		BotID:          botID,
+		SummaryService: service,
+		Notifier:       note,
+		Targets:        cfg.Targets,
+		DefaultTarget:  cfg.DefaultTarget,
 	})
 
 	server := &http.Server{
-		Addr:              ":" + port,
-		Handler:           proxy,
+		Addr:              ":" + cfg.Port,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		// WriteTimeout は設定しない: 要約は数分かかり、
+		// 上限は Cloud Run の timeout と Scheduler の attempt_deadline が担保する
 	}
+
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("HTTP server listening on :%s", port) //nolint:gosec // PORT は運用者が設定する環境変数で外部入力ではない
+		log.Printf("HTTP server listening on :%s", cfg.Port) //nolint:gosec // PORT は運用者が設定する環境変数で外部入力ではない
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
 	}()
 
-	// 初期化
-	cfg, err := config.Load()
-	if err != nil {
-		log.Printf("config load failed: %v (returning 503)", err)
-	} else {
-		session, err := discordgo.New("Bot " + cfg.DiscordToken)
-		if err != nil {
-			log.Printf("failed to create Discord session: %v", err)
-		} else {
-			session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages
-			if err := session.Open(); err != nil {
-				log.Printf("failed to start Discord session: %v", err)
-			} else {
-				defer func() { _ = session.Close() }()
-				geminiClient := gemini.New(cfg.GeminiAPIKey)
-				if cfg.GeminiModel != "" {
-					geminiClient = geminiClient.WithModel(cfg.GeminiModel)
-				}
-				targetLogChannels := make(map[string]string, len(cfg.Targets))
-				for name, target := range cfg.Targets {
-					if target.LogChannelID != "" {
-						targetLogChannels[name] = target.LogChannelID
-					}
-				}
-				note := &notifier.DiscordNotifier{
-					Session:          session,
-					ChannelID:        cfg.LogChannelID,
-					MaxMessageLength: cfg.Summary.MessageCharBudget,
-					TargetChannels:   targetLogChannels,
-				}
-				collector := &summary.Collector{
-					Session:        session,
-					Lookback:       cfg.Summary.Lookback,
-					FetchLimit:     cfg.Summary.FetchLimit,
-					MaxConcurrency: cfg.Summary.MaxConcurrency,
-				}
-				service := &summary.Service{
-					Collector:  collector,
-					Summarizer: geminiClient,
-					Notifier:   note,
-					Config: summary.Config{
-						MessageCharBudget: cfg.Summary.MessageCharBudget,
-						MaxHighlights:     cfg.Summary.MaxHighlights,
-						MaxAttempts:       cfg.Summary.MaxAttempts,
-					},
-				}
-				mux := tasks.NewMux(tasks.Config{
-					Session:        session,
-					SummaryService: service,
-					Notifier:       note,
-					Targets:        cfg.Targets,
-					DefaultTarget:  cfg.DefaultTarget,
-				})
-				handlerMu.Lock()
-				realHandler = mux
-				ready = true
-				handlerMu.Unlock()
-				log.Println("Bot is running.")
-			}
-		}
-	}
-
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
-	case <-stop:
-		log.Println("shutdown signal received")
 	case err := <-serverErrors:
-		log.Printf("HTTP server error: %v", err)
+		return err
+	case <-stop:
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Printf("failed to shut down HTTP server: %v", err)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
-
-	log.Println("Shutting down bot")
+	return nil
 }
