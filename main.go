@@ -73,7 +73,7 @@ func run() error {
 	}
 
 	service := &summary.Service{
-		Collector: &summary.Collector{
+		Collector: &discord.Collector{
 			Session:        session,
 			Lookback:       cfg.Summary.Lookback,
 			FetchLimit:     cfg.Summary.FetchLimit,
