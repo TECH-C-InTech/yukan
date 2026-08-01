@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -119,6 +120,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 	}
 
 	sem := make(chan struct{}, c.MaxConcurrency)
+	var skippedCount atomic.Int32
 
 	for idx, ch := range channels {
 		if ch == nil || !isTextChannel(ch.Type) {
@@ -136,11 +138,14 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 			}
 			defer func() { <-sem }()
 
-			digest, err := c.collectChannel(ctx, guildID, botID, cutoff, channel, parentNames, memberNames)
+			digest, skipped, err := c.collectChannel(ctx, guildID, botID, cutoff, channel, parentNames, memberNames)
 			if err != nil {
 				setErr(err)
 				cancel()
 				return
+			}
+			if skipped {
+				skippedCount.Add(1)
 			}
 			if digest == nil {
 				return
@@ -171,9 +176,10 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 	fallback := fallbackMessage(totalCollectedMsgs)
 
 	return CollectorResult{
-		Digests:       digests,
-		FallbackText:  fallback,
-		TotalMessages: totalCollectedMsgs,
+		Digests:         digests,
+		FallbackText:    fallback,
+		TotalMessages:   totalCollectedMsgs,
+		SkippedChannels: int(skippedCount.Load()),
 	}, nil
 }
 
@@ -184,7 +190,7 @@ func fallbackMessage(total int) string {
 	return fallbackGeneric
 }
 
-func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*ChannelDigest, error) {
+func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*ChannelDigest, bool, error) {
 	displayName := channelDisplayName(ch, parentNames)
 
 	collected := make([]MessageDigest, 0, c.FetchLimit)
@@ -193,7 +199,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 
 	for {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, false, ctx.Err()
 		}
 
 		messages, err := c.Session.ChannelMessages(ch.ID, c.FetchLimit, beforeID, "", "")
@@ -240,10 +246,10 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 	}
 
 	if failedFetch || len(collected) == 0 {
-		return nil, nil
+		return nil, failedFetch, nil
 	}
 
-	return &ChannelDigest{Name: displayName, Messages: collected}, nil
+	return &ChannelDigest{Name: displayName, Messages: collected}, false, nil
 }
 
 func channelDisplayName(ch *discordgo.Channel, parentNames map[string]string) string {

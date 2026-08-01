@@ -82,6 +82,9 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 	result.TotalMessages = collectorResult.TotalMessages
 
 	s.info(ctx, fmt.Sprintf("メッセージ取得終了 (チャンネル=%d, メッセージ=%d, 所要%s)", len(collectorResult.Digests), collectorResult.TotalMessages, formatDuration(time.Since(workflowStart))))
+	if collectorResult.SkippedChannels > 0 {
+		s.info(ctx, fmt.Sprintf("取得できないチャンネルを%d件スキップしました", collectorResult.SkippedChannels))
+	}
 
 	finalMessage := collectorResult.FallbackText
 	var highlights []Highlight
