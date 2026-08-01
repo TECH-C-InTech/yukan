@@ -42,7 +42,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 	}
 
 	now := time.Now()
-	cutoff := now.Add(-c.lookback())
+	cutoff := now.Add(-c.Lookback)
 
 	var (
 		channels    []*discordgo.Channel
@@ -118,7 +118,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 		errMu.Unlock()
 	}
 
-	sem := make(chan struct{}, c.concurrency())
+	sem := make(chan struct{}, c.MaxConcurrency)
 
 	for idx, ch := range channels {
 		if ch == nil || !isTextChannel(ch.Type) {
@@ -184,31 +184,10 @@ func fallbackMessage(total int) string {
 	return fallbackGeneric
 }
 
-func (c *Collector) lookback() time.Duration {
-	if c == nil || c.Lookback <= 0 {
-		return 24 * time.Hour
-	}
-	return c.Lookback
-}
-
-func (c *Collector) fetchLimit() int {
-	if c == nil || c.FetchLimit <= 0 {
-		return 100
-	}
-	return c.FetchLimit
-}
-
-func (c *Collector) concurrency() int {
-	if c == nil || c.MaxConcurrency <= 0 {
-		return 4
-	}
-	return c.MaxConcurrency
-}
-
 func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*ChannelDigest, error) {
 	displayName := channelDisplayName(ch, parentNames)
 
-	collected := make([]MessageDigest, 0, c.fetchLimit())
+	collected := make([]MessageDigest, 0, c.FetchLimit)
 	beforeID := ""
 	failedFetch := false
 
@@ -217,7 +196,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 			return nil, ctx.Err()
 		}
 
-		messages, err := c.Session.ChannelMessages(ch.ID, c.fetchLimit(), beforeID, "", "")
+		messages, err := c.Session.ChannelMessages(ch.ID, c.FetchLimit, beforeID, "", "")
 		if err != nil {
 			log.Printf("collector: failed to fetch messages for channel %s: %v", ch.ID, err)
 			failedFetch = true
@@ -253,7 +232,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 			collected = append(collected, digest)
 		}
 
-		if reachedOlderThanWindow || len(messages) < c.fetchLimit() {
+		if reachedOlderThanWindow || len(messages) < c.FetchLimit {
 			break
 		}
 
