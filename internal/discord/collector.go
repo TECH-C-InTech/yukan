@@ -1,4 +1,4 @@
-package summary
+package discord
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+
+	"yukan/internal/summary"
 )
 
 // Collector fetches recent messages from Discord.
@@ -26,8 +28,8 @@ const (
 )
 
 // Collect gathers messages from the target guild within the configured lookback window.
-func (c *Collector) Collect(ctx context.Context, guildID, botID string) (CollectorResult, error) {
-	var empty CollectorResult
+func (c *Collector) Collect(ctx context.Context, guildID, botID string) (summary.CollectorResult, error) {
+	var empty summary.CollectorResult
 
 	if guildID == "" {
 		return empty, fmt.Errorf("guild id is required")
@@ -102,7 +104,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	results := make([]*ChannelDigest, len(channels))
+	results := make([]*summary.ChannelDigest, len(channels))
 	var wg sync.WaitGroup
 	var firstErr error
 	var errMu sync.Mutex
@@ -160,7 +162,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 	}
 
 	var (
-		digests            []ChannelDigest
+		digests            []summary.ChannelDigest
 		totalCollectedMsgs int
 	)
 
@@ -174,7 +176,7 @@ func (c *Collector) Collect(ctx context.Context, guildID, botID string) (Collect
 
 	fallback := fallbackMessage(totalCollectedMsgs)
 
-	return CollectorResult{
+	return summary.CollectorResult{
 		Digests:         digests,
 		FallbackText:    fallback,
 		TotalMessages:   totalCollectedMsgs,
@@ -189,10 +191,10 @@ func fallbackMessage(total int) string {
 	return ""
 }
 
-func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*ChannelDigest, bool, error) {
+func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*summary.ChannelDigest, bool, error) {
 	displayName := channelDisplayName(ch, parentNames)
 
-	collected := make([]MessageDigest, 0, c.FetchLimit)
+	collected := make([]summary.MessageDigest, 0, c.FetchLimit)
 	beforeID := ""
 	failedFetch := false
 
@@ -223,7 +225,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 				continue
 			}
 
-			digest := MessageDigest{
+			digest := summary.MessageDigest{
 				Author:    resolveAuthor(c.Session, guildID, msg, memberNames),
 				AvatarURL: userAvatarURL(msg.Author),
 				Content:   extractContent(msg),
@@ -246,7 +248,7 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 		return nil, failedFetch, nil
 	}
 
-	return &ChannelDigest{Name: displayName, Messages: collected}, false, nil
+	return &summary.ChannelDigest{Name: displayName, Messages: collected}, false, nil
 }
 
 func channelDisplayName(ch *discordgo.Channel, parentNames map[string]string) string {
