@@ -51,7 +51,10 @@ func run() error {
 		return err
 	}
 
-	geminiClient := gemini.New(cfg.GeminiAPIKey)
+	geminiClient, err := gemini.New(context.Background(), cfg.GeminiAPIKey)
+	if err != nil {
+		return err
+	}
 	if cfg.GeminiModel != "" {
 		geminiClient = geminiClient.WithModel(cfg.GeminiModel)
 	}

@@ -3,7 +3,6 @@ package summary
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -52,6 +51,9 @@ type Service struct {
 
 	// Oddity は info 通知に 👁️👁️ を添えるかを決める。nil なら 1/20 の乱数
 	Oddity func() bool
+
+	// Backoff はリトライ間隔を決める。nil なら指数バックオフ (テストでゼロを注入する)
+	Backoff func(attempt int) time.Duration
 }
 
 // Generate produces a summary result for the target guild.
@@ -102,22 +104,30 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 			maxAttempts := s.Config.MaxAttempts
 			var lastRawResponse string
 			for attempt := 1; attempt <= maxAttempts && summaryCtx.Err() == nil; attempt++ {
+				if attempt > 1 {
+					backoff := s.Backoff
+					if backoff == nil {
+						backoff = retryBackoff
+					}
+					select {
+					case <-time.After(backoff(attempt)):
+					case <-summaryCtx.Done():
+						continue
+					}
+				}
 				s.info(ctx, fmt.Sprintf("Gemini呼び出し開始 (%d/%d)", attempt, maxAttempts))
 				geminiStart := time.Now()
-				summaryHighlights, err := s.Summarizer.Summarize(summaryCtx, prompt)
+				raw, err := s.Summarizer.Summarize(summaryCtx, prompt)
 				s.info(ctx, fmt.Sprintf("Gemini呼び出し終了 (%d/%d, 所要%s)", attempt, maxAttempts, formatDuration(time.Since(geminiStart))))
 				if err != nil {
-					rawMsg := extractRawResponse(err)
-					if rawMsg != "" {
-						lastRawResponse = rawMsg
-					} else {
-						lastRawResponse = err.Error()
-					}
+					lastRawResponse = err.Error()
 					s.error(ctx, fmt.Sprintf("Geminiハイライト生成が失敗しました (%d/%d)\n%s", attempt, maxAttempts, lastRawResponse))
 					continue
 				}
-				if len(summaryHighlights) == 0 {
-					s.error(ctx, fmt.Sprintf("Geminiが空のハイライトを返したため再試行します (%d/%d)", attempt, maxAttempts))
+				summaryHighlights, err := ParseHighlights(raw)
+				if err != nil {
+					lastRawResponse = raw
+					s.error(ctx, fmt.Sprintf("Geminiハイライトの解析に失敗したため再試行します (%d/%d)\n%s", attempt, maxAttempts, raw))
 					continue
 				}
 				highlights = summaryHighlights
@@ -176,6 +186,16 @@ func (s *Service) info(ctx context.Context, message string) {
 	}
 }
 
+// retryBackoff は 2 回目以降のリトライ間隔 (指数バックオフ + ジッター) を返す。
+func retryBackoff(attempt int) time.Duration {
+	base := 2 * time.Second << (attempt - 2) // 2s, 4s, 8s, ...
+	if base > 30*time.Second {
+		base = 30 * time.Second
+	}
+	jitter := time.Duration(rand.Int64N(int64(base / 4))) //nolint:gosec // リトライ分散用の乱数で暗号用途ではない
+	return base + jitter
+}
+
 func defaultOddity() bool {
 	return rand.IntN(20) == 0 //nolint:gosec // 演出用の乱数で暗号用途ではない
 }
@@ -192,15 +212,4 @@ func formatDuration(d time.Duration) string {
 		d = 0
 	}
 	return fmt.Sprintf("%.2fs", d.Seconds())
-}
-
-func extractRawResponse(err error) string {
-	if err == nil {
-		return ""
-	}
-	var rawErr interface{ RawResponse() string }
-	if errors.As(err, &rawErr) && rawErr != nil {
-		return strings.TrimSpace(rawErr.RawResponse())
-	}
-	return ""
 }
