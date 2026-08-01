@@ -83,7 +83,10 @@ func TestExtractResponsePayload(t *testing.T) {
 }
 
 func TestWithModel(t *testing.T) {
-	c := New("key")
+	c, err := New(t.Context(), "key")
+	if err != nil {
+		t.Fatalf("New error = %v", err)
+	}
 	if c.model != defaultModel {
 		t.Errorf("default model = %q", c.model)
 	}
@@ -97,12 +100,21 @@ func TestWithModel(t *testing.T) {
 }
 
 func TestSummarizeValidation(t *testing.T) {
-	c := New("key")
+	c, err := New(t.Context(), "key")
+	if err != nil {
+		t.Fatalf("New error = %v", err)
+	}
 	if _, err := c.Summarize(t.Context(), "   "); err == nil || !strings.Contains(err.Error(), "empty") {
 		t.Errorf("empty prompt should fail, got %v", err)
 	}
 	unconfigured := &Client{}
 	if _, err := unconfigured.Summarize(t.Context(), "prompt"); err == nil {
 		t.Error("unconfigured client should fail")
+	}
+}
+
+func TestNewRequiresAPIKey(t *testing.T) {
+	if _, err := New(t.Context(), "  "); err == nil {
+		t.Error("New should fail with empty api key")
 	}
 }

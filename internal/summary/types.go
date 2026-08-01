@@ -71,7 +71,8 @@ type Config struct {
 	MaxAttempts       int
 }
 
-// Summarizer generates structured highlights from the collected messages.
+// Summarizer は収集メッセージの要約を生成し、構造化ハイライトの生 JSON を返す。
+// パース (ParseHighlights) はドメイン側で行う。
 type Summarizer interface {
-	Summarize(ctx context.Context, prompt string) ([]Highlight, error)
+	Summarize(ctx context.Context, prompt string) (string, error)
 }

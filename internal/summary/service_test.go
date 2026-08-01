@@ -3,9 +3,9 @@ package summary
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeCollector struct {
@@ -20,11 +20,11 @@ func (f *fakeCollector) Collect(_ context.Context, _, _ string) (CollectorResult
 }
 
 type fakeSummarizer struct {
-	responses []func() ([]Highlight, error)
+	responses []func() (string, error)
 	calls     int
 }
 
-func (f *fakeSummarizer) Summarize(_ context.Context, _ string) ([]Highlight, error) {
+func (f *fakeSummarizer) Summarize(_ context.Context, _ string) (string, error) {
 	idx := f.calls
 	f.calls++
 	if idx >= len(f.responses) {
@@ -40,11 +40,6 @@ type fakeNotifier struct {
 
 func (f *fakeNotifier) Info(_ context.Context, msg string)  { f.infos = append(f.infos, msg) }
 func (f *fakeNotifier) Error(_ context.Context, msg string) { f.errors = append(f.errors, msg) }
-
-type rawResponseError struct{ raw string }
-
-func (e *rawResponseError) Error() string       { return "decode failed" }
-func (e *rawResponseError) RawResponse() string { return e.raw }
 
 var testDigests = []ChannelDigest{{
 	Name: "general",
@@ -62,16 +57,17 @@ func newTestService(collector *fakeCollector, summarizer *fakeSummarizer, note *
 		Notifier:   note,
 		Config:     Config{MessageCharBudget: 1800, MaxHighlights: 3, MaxAttempts: 3},
 		Oddity:     func() bool { return false },
+		Backoff:    func(int) time.Duration { return 0 },
 	}
 }
 
-func okHighlights() ([]Highlight, error) {
-	return []Highlight{{Title: "t", Description: "d", Link: "https://discord.com/channels/1/2/3"}}, nil
+func okHighlights() (string, error) {
+	return `[{"title":"t","emoji":"","description":"d","link":"https://discord.com/channels/1/2/3","color":""}]`, nil
 }
 
 func TestGenerateSuccess(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){okHighlights}}
+	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
 	note := &fakeNotifier{}
 
 	result, err := newTestService(collector, summarizer, note).Generate(t.Context(), Request{TargetName: "dev", GuildID: "g"})
@@ -97,8 +93,8 @@ func TestGenerateSuccess(t *testing.T) {
 
 func TestGenerateRetriesOnErrorThenSucceeds(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){
-		func() ([]Highlight, error) { return nil, errors.New("boom") },
+	summarizer := &fakeSummarizer{responses: []func() (string, error){
+		func() (string, error) { return "", errors.New("boom") },
 		okHighlights,
 	}}
 	note := &fakeNotifier{}
@@ -117,8 +113,8 @@ func TestGenerateRetriesOnErrorThenSucceeds(t *testing.T) {
 
 func TestGenerateRetriesOnEmptyHighlights(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){
-		func() ([]Highlight, error) { return []Highlight{}, nil },
+	summarizer := &fakeSummarizer{responses: []func() (string, error){
+		func() (string, error) { return "[]", nil },
 	}}
 	note := &fakeNotifier{}
 
@@ -136,10 +132,8 @@ func TestGenerateRetriesOnEmptyHighlights(t *testing.T) {
 
 func TestGenerateExhaustsRetriesAndReportsRaw(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1, FallbackText: "フォールバック"}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){
-		func() ([]Highlight, error) {
-			return nil, fmt.Errorf("wrap: %w", &rawResponseError{raw: "RAW_PAYLOAD"})
-		},
+	summarizer := &fakeSummarizer{responses: []func() (string, error){
+		func() (string, error) { return "RAW_PAYLOAD not json", nil },
 	}}
 	note := &fakeNotifier{}
 
@@ -202,7 +196,7 @@ func TestGenerateNoMessages(t *testing.T) {
 
 func TestGenerateReportsSkippedChannels(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1, SkippedChannels: 16}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){okHighlights}}
+	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
 	note := &fakeNotifier{}
 
 	if _, err := newTestService(collector, summarizer, note).Generate(t.Context(), Request{GuildID: "g"}); err != nil {
@@ -221,7 +215,7 @@ func TestGenerateReportsSkippedChannels(t *testing.T) {
 
 func TestOddityPostsEye(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
-	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){okHighlights}}
+	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
 	note := &fakeNotifier{}
 	svc := newTestService(collector, summarizer, note)
 	svc.Oddity = func() bool { return true }

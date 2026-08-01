@@ -5,54 +5,35 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/genai"
-
-	"yukan/internal/summary"
 )
 
-const defaultModel = "gemini-2.5-flash"
+const (
+	defaultModel = "gemini-2.5-flash"
+	// 1回の生成呼び出しの上限。ハングした接続でリトライ機会を失わないための保険
+	requestTimeout = 2 * time.Minute
+)
 
-type highlightDecodeError struct {
-	raw string
-	err error
-}
-
-func (e *highlightDecodeError) Error() string {
-	if e == nil || e.err == nil {
-		return "failed to decode gemini highlights"
-	}
-	return fmt.Sprintf("failed to decode gemini highlights: %v", e.err)
-}
-
-func (e *highlightDecodeError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.err
-}
-
-func (e *highlightDecodeError) RawResponse() string {
-	if e == nil {
-		return ""
-	}
-	return e.raw
-}
-
-// Client wraps the official Gemini Go SDK to generate summaries.
+// Client wraps the official Gemini Go SDK.
 type Client struct {
-	apiKey string
+	client *genai.Client
 	model  string
 }
 
-// New constructs a summarizer backed by Gemini. apiKey must be non-empty.
-func New(apiKey string) *Client {
-	return &Client{
-		apiKey: apiKey,
-		model:  defaultModel,
+// New は Gemini クライアントを生成する。内部の genai クライアントは
+// ここで1度だけ作り、呼び出しごとに使い回す。
+func New(ctx context.Context, apiKey string) (*Client, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("gemini api key is empty")
 	}
+	gClient, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gemini client: %w", err)
+	}
+	return &Client{client: gClient, model: defaultModel}, nil
 }
 
 // WithModel overrides the default model identifier.
@@ -65,30 +46,19 @@ func (c *Client) WithModel(model string) *Client {
 	return &clone
 }
 
-// Summarize sends the prompt to Gemini and returns structured highlights.
-func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highlight, error) {
+// Summarize sends the prompt to Gemini and returns the raw JSON payload.
+// パースはドメイン側 (summary) の責務とし、このアダプタは summary に依存しない。
+func (c *Client) Summarize(ctx context.Context, prompt string) (string, error) {
 	trimmedPrompt := strings.TrimSpace(prompt)
 	if trimmedPrompt == "" {
-		slog.WarnContext(ctx, "gemini prompt is empty")
-		return nil, fmt.Errorf("prompt is empty")
+		return "", fmt.Errorf("prompt is empty")
 	}
-	if c == nil || c.apiKey == "" {
-		slog.ErrorContext(ctx, "gemini client is not configured")
-		return nil, fmt.Errorf("gemini client is not configured")
+	if c == nil || c.client == nil {
+		return "", fmt.Errorf("gemini client is not configured")
 	}
 
-	if forceEmptyHighlightsEnabled() {
-		slog.WarnContext(ctx, "forcing empty highlights via YUKAN_FORCE_EMPTY_HIGHLIGHTS")
-		return []summary.Highlight{}, nil
-	}
-
-	cfg := &genai.ClientConfig{APIKey: c.apiKey}
-
-	gClient, err := genai.NewClient(ctx, cfg)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to create gemini client", "error", err)
-		return nil, fmt.Errorf("failed to create gemini client: %w", err)
-	}
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 
 	config := &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
@@ -110,40 +80,22 @@ func (c *Client) Summarize(ctx context.Context, prompt string) ([]summary.Highli
 	}
 
 	slog.InfoContext(ctx, "invoking gemini", "model", c.model, "prompt_length", len(trimmedPrompt))
-	resp, err := gClient.Models.GenerateContent(ctx, c.model, genai.Text(trimmedPrompt), config)
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, genai.Text(trimmedPrompt), config)
 	if err != nil {
 		slog.ErrorContext(ctx, "gemini generateContent failed", "model", c.model, "error", err)
-		return nil, fmt.Errorf("failed to call gemini generateContent: %w", err)
+		return "", fmt.Errorf("failed to call gemini generateContent: %w", err)
 	}
 
 	raw, err := extractResponsePayload(resp)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to extract gemini payload", "error", err)
-		return nil, fmt.Errorf("failed to read gemini response: %w", err)
+		return "", fmt.Errorf("failed to read gemini response: %w", err)
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		slog.WarnContext(ctx, "gemini returned empty payload")
-		return nil, fmt.Errorf("gemini returned empty summary")
+		return "", fmt.Errorf("gemini returned empty summary")
 	}
-
-	highlights, err := summary.ParseHighlights(raw)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to parse gemini highlights", "error", err)
-		return nil, &highlightDecodeError{raw: raw, err: err}
-	}
-	slog.InfoContext(ctx, "parsed gemini highlights", "count", len(highlights))
-
-	return highlights, nil
-}
-
-func forceEmptyHighlightsEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("YUKAN_FORCE_EMPTY_HIGHLIGHTS"))) {
-	case "1", "true", "yes":
-		return true
-	default:
-		return false
-	}
+	return raw, nil
 }
 
 func extractResponsePayload(resp *genai.GenerateContentResponse) (string, error) {
