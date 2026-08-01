@@ -200,6 +200,25 @@ func TestGenerateNoMessages(t *testing.T) {
 	}
 }
 
+func TestGenerateReportsSkippedChannels(t *testing.T) {
+	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1, SkippedChannels: 16}}
+	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){okHighlights}}
+	note := &fakeNotifier{}
+
+	if _, err := newTestService(collector, summarizer, note).Generate(t.Context(), Request{GuildID: "g"}); err != nil {
+		t.Fatalf("Generate error = %v", err)
+	}
+	found := false
+	for _, msg := range note.infos {
+		if strings.Contains(msg, "16件スキップ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("skipped channels should be reported: %v", note.infos)
+	}
+}
+
 func TestOddityPostsEye(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
 	summarizer := &fakeSummarizer{responses: []func() ([]Highlight, error){okHighlights}}

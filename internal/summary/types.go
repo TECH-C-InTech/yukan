@@ -39,6 +39,8 @@ type CollectorResult struct {
 	Digests       []ChannelDigest
 	FallbackText  string
 	TotalMessages int
+	// SkippedChannels は権限不足などで読めずスキップしたチャンネル数
+	SkippedChannels int
 }
 
 // Request describes a summary workflow trigger.
