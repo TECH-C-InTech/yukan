@@ -17,10 +17,13 @@ func TestBuildSummaryPrompt(t *testing.T) {
 		},
 	}}
 
-	prompt := buildSummaryPrompt(digests, 3)
+	prompt := buildSummaryPrompt(digests, 3, 24*time.Hour)
 
 	if !strings.Contains(prompt, "最大3件") {
 		t.Errorf("prompt should mention max highlights: %q", prompt)
+	}
+	if !strings.Contains(prompt, "過去24時間") {
+		t.Errorf("prompt should mention lookback hours")
 	}
 	if !strings.Contains(prompt, "# general") {
 		t.Errorf("prompt should contain channel header")
@@ -36,11 +39,11 @@ func TestBuildSummaryPrompt(t *testing.T) {
 }
 
 func TestBuildSummaryPromptEdgeCases(t *testing.T) {
-	if got := buildSummaryPrompt(nil, 3); got != "" {
+	if got := buildSummaryPrompt(nil, 3, 24*time.Hour); got != "" {
 		t.Errorf("empty digests should return empty prompt, got %q", got)
 	}
 	digests := []ChannelDigest{{Name: "c", Messages: []MessageDigest{{Author: "a", Content: "x"}}}}
-	if got := buildSummaryPrompt(digests, 0); !strings.Contains(got, "最大3件") {
+	if got := buildSummaryPrompt(digests, 0, 0); !strings.Contains(got, "最大3件") {
 		t.Errorf("non-positive maxHighlights should fall back to 3")
 	}
 }

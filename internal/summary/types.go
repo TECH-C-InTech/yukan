@@ -65,6 +65,8 @@ type Config struct {
 	MessageCharBudget int
 	MaxHighlights     int
 	MaxAttempts       int
+	// Lookback はプロンプトの「過去N時間」表記に使う (収集期間と揃える)
+	Lookback time.Duration
 }
 
 // Summarizer は収集メッセージの要約を生成し、構造化ハイライトの生 JSON を返す。

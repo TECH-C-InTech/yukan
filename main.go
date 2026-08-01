@@ -86,6 +86,7 @@ func run() error {
 			MessageCharBudget: cfg.Summary.MessageCharBudget,
 			MaxHighlights:     cfg.Summary.MaxHighlights,
 			MaxAttempts:       cfg.Summary.MaxAttempts,
+			Lookback:          cfg.Summary.Lookback,
 		},
 	}
 

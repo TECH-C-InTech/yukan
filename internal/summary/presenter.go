@@ -80,11 +80,14 @@ func BuildSummaryMessage(header string, highlights []Highlight, digests []Channe
 		embed := &discordgo.MessageEmbed{
 			Title:       title,
 			Description: description,
-			URL:         link,
 			Color:       color,
 		}
-		if msg := findMessageByURL(digests, link); msg != nil {
-			embed.Author = &discordgo.MessageEmbedAuthor{Name: msg.Author, IconURL: msg.AvatarURL}
+		// モデルが幻覚した Discord 外 URL をリンク化しない
+		if isDiscordMessageLink(link) {
+			embed.URL = link
+			if msg := findMessageByURL(digests, link); msg != nil {
+				embed.Author = &discordgo.MessageEmbedAuthor{Name: msg.Author, IconURL: msg.AvatarURL}
+			}
 		}
 		embeds = append(embeds, embed)
 	}
@@ -94,6 +97,11 @@ func BuildSummaryMessage(header string, highlights []Highlight, digests []Channe
 	}
 
 	return header, embeds
+}
+
+func isDiscordMessageLink(link string) bool {
+	return strings.HasPrefix(link, "https://discord.com/channels/") ||
+		strings.HasPrefix(link, "https://discordapp.com/channels/")
 }
 
 func findMessageByURL(digests []ChannelDigest, url string) *MessageDigest {
