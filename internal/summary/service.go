@@ -126,7 +126,7 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 			summaryCtx = context.Background()
 		}
 
-		prompt := buildSummaryPrompt(collectorResult.Digests, s.Config.MaxHighlights)
+		prompt := buildSummaryPrompt(collectorResult.Digests, s.Config.MaxHighlights, s.Config.Lookback)
 		if prompt == "" {
 			s.info(ctx, "Gemini呼び出しスキップ (プロンプトなし)")
 		} else {

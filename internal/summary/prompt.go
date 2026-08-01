@@ -3,18 +3,23 @@ package summary
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
-func buildSummaryPrompt(digests []ChannelDigest, maxHighlights int) string {
+func buildSummaryPrompt(digests []ChannelDigest, maxHighlights int, lookback time.Duration) string {
 	if len(digests) == 0 {
 		return ""
 	}
 	if maxHighlights <= 0 {
 		maxHighlights = 3
 	}
+	lookbackHours := int(lookback.Hours())
+	if lookbackHours <= 0 {
+		lookbackHours = 24
+	}
 
 	var builder strings.Builder
-	builder.WriteString("あなたはDiscordサーバーの編集者です。以下は過去24時間に投稿されたメッセージ一覧です。\n")
+	fmt.Fprintf(&builder, "あなたはDiscordサーバーの編集者です。以下は過去%d時間に投稿されたメッセージ一覧です。\n", lookbackHours)
 	fmt.Fprintf(&builder, "最も注目すべき出来事を最大%d件選び、日本語の夕刊ハイライトを作成してください。\n", maxHighlights)
 	builder.WriteString("出力は必ず次のJSON配列のみとし、整形や説明文を入れないでください。\n")
 	builder.WriteString("例: [{\"title\":\"見出し\",\"emoji\":\"\",\"description\":\"本文\",\"link\":\"https://discord.com/channels/...\",\"color\":\"#b0b0b0\"}]\n")

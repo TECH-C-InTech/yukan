@@ -139,6 +139,17 @@ func TestBuildSummaryMessage(t *testing.T) {
 		}
 	})
 
+	t.Run("non-discord link is not linked", func(t *testing.T) {
+		highlights := []Highlight{{Title: "t", Description: "d", Link: "https://evil.example.com/x"}}
+		_, embeds := BuildSummaryMessage("h", highlights, digests)
+		if len(embeds) != 1 {
+			t.Fatalf("highlight should be kept, embeds = %d", len(embeds))
+		}
+		if embeds[0].URL != "" || embeds[0].Author != nil {
+			t.Errorf("external URL should not be linked: %+v", embeds[0])
+		}
+	})
+
 	t.Run("incomplete highlights are dropped", func(t *testing.T) {
 		highlights := []Highlight{{Title: "", Description: "d", Link: "l"}}
 		_, embeds := BuildSummaryMessage("h", highlights, nil)
