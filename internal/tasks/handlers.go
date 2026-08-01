@@ -2,6 +2,7 @@
 package tasks
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,17 @@ import (
 	"yukan/internal/notifier"
 	"yukan/internal/summary"
 )
+
+// summaryGenerator は夕刊生成を抽象化する (テストでフェイクを注入する)。
+type summaryGenerator interface {
+	Generate(ctx context.Context, req summary.Request) (summary.Result, error)
+}
+
+// messageSender は Discord への投稿に使う discordgo.Session のサブセット。
+type messageSender interface {
+	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error)
+}
 
 // Config wires the HTTP handlers.
 type Config struct {
@@ -28,10 +40,16 @@ type Config struct {
 func NewMux(cfg Config) http.Handler {
 	handler := &Handler{
 		session:       cfg.Session,
-		service:       cfg.SummaryService,
 		notifier:      cfg.Notifier,
 		targets:       cfg.Targets,
 		defaultTarget: cfg.DefaultTarget,
+	}
+	// typed nil をインターフェースに入れると nil チェックが効かなくなるため明示的に分岐する
+	if cfg.SummaryService != nil {
+		handler.service = cfg.SummaryService
+	}
+	if cfg.Session != nil {
+		handler.sender = cfg.Session
 	}
 
 	mux := http.NewServeMux()
@@ -45,7 +63,8 @@ func NewMux(cfg Config) http.Handler {
 // Handler processes task invocations.
 type Handler struct {
 	session       *discordgo.Session
-	service       *summary.Service
+	sender        messageSender
+	service       summaryGenerator
 	notifier      notifier.Notifier
 	targets       map[string]config.Target
 	defaultTarget string
@@ -66,7 +85,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.service == nil || h.session == nil {
+	if h.service == nil || h.sender == nil {
 		http.Error(w, "service not ready", http.StatusServiceUnavailable)
 		return
 	}
@@ -86,7 +105,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	botID := ""
-	if h.session.State != nil && h.session.State.User != nil {
+	if h.session != nil && h.session.State != nil && h.session.State.User != nil {
 		botID = h.session.State.User.ID
 	}
 
@@ -125,7 +144,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if trimmed != "" {
-		if _, err := h.session.ChannelMessageSend(target.ChannelID, trimmed); err != nil {
+		if _, err := h.sender.ChannelMessageSend(target.ChannelID, trimmed); err != nil {
 			log.Printf("daily summary: failed to post header message: %v", err)
 			http.Error(w, "failed to post summary", http.StatusInternalServerError)
 			return
@@ -136,7 +155,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 		if embed == nil {
 			continue
 		}
-		if _, err := h.session.ChannelMessageSendComplex(target.ChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
+		if _, err := h.sender.ChannelMessageSendComplex(target.ChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
 			log.Printf("daily summary: failed to post embed message: %v", err)
 			http.Error(w, "failed to post summary", http.StatusInternalServerError)
 			return
