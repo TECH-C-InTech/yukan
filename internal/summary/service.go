@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bwmarrin/discordgo"
+
 	"yukan/internal/notifier"
 )
 
@@ -42,10 +44,16 @@ type MessageCollector interface {
 	Collect(ctx context.Context, guildID, botID string) (CollectorResult, error)
 }
 
+// Publisher は生成した夕刊の投稿を抽象化する。
+type Publisher interface {
+	Publish(ctx context.Context, channelID, content string, embeds []*discordgo.MessageEmbed) error
+}
+
 // Service coordinates collectors, LLMs, and presenters to build summaries.
 type Service struct {
 	Collector  MessageCollector
 	Summarizer Summarizer
+	Publisher  Publisher
 	Notifier   notifier.Notifier
 	Config     Config
 
@@ -54,6 +62,31 @@ type Service struct {
 
 	// Backoff はリトライ間隔を決める。nil なら指数バックオフ (テストでゼロを注入する)
 	Backoff func(attempt int) time.Duration
+}
+
+// Run は夕刊を生成し、公開可能なら req.ChannelID へ投稿まで行う。
+func (s *Service) Run(ctx context.Context, req Request) (Result, error) {
+	result, err := s.Generate(ctx, req)
+	if err != nil {
+		return result, err
+	}
+	if strings.TrimSpace(result.Content) == "" {
+		return result, nil
+	}
+	if !result.Publishable {
+		s.error(ctx, fmt.Sprintf("夕刊ポストをスキップしました (target=%s channel=%s)", req.TargetName, req.ChannelID))
+		return result, nil
+	}
+	if s.Publisher == nil {
+		return result, fmt.Errorf("publisher is not configured")
+	}
+	if err := s.Publisher.Publish(ctx, req.ChannelID, strings.TrimSpace(result.Content), result.Embeds); err != nil {
+		s.error(ctx, fmt.Sprintf("夕刊の投稿に失敗しました (%s)", err))
+		return result, err
+	}
+	result.Posted = true
+	s.info(ctx, fmt.Sprintf("出力送信完了 (target=%s channel=%s, 累計%s)", req.TargetName, req.ChannelID, formatDuration(time.Since(result.WorkflowStart))))
+	return result, nil
 }
 
 // Generate produces a summary result for the target guild.

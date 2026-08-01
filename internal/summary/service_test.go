@@ -213,6 +213,68 @@ func TestGenerateReportsSkippedChannels(t *testing.T) {
 	}
 }
 
+type fakePublisher struct {
+	channelID string
+	content   string
+	embeds    int
+	err       error
+}
+
+func (f *fakePublisher) Publish(_ context.Context, channelID, content string, embeds []*discordgo.MessageEmbed) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.channelID = channelID
+	f.content = content
+	f.embeds = len(embeds)
+	return nil
+}
+
+func TestRunPublishes(t *testing.T) {
+	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
+	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
+	pub := &fakePublisher{}
+	svc := newTestService(collector, summarizer, &fakeNotifier{})
+	svc.Publisher = pub
+
+	result, err := svc.Run(t.Context(), Request{GuildID: "g", ChannelID: "ch1", TargetName: "dev"})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if !result.Posted {
+		t.Error("result should be posted")
+	}
+	if pub.channelID != "ch1" || pub.embeds != 1 || pub.content == "" {
+		t.Errorf("publish args = %+v", pub)
+	}
+}
+
+func TestRunSkipsWhenNotPublishable(t *testing.T) {
+	collector := &fakeCollector{result: CollectorResult{FallbackText: "静かな一日"}}
+	pub := &fakePublisher{}
+	svc := newTestService(collector, &fakeSummarizer{}, &fakeNotifier{})
+	svc.Publisher = pub
+
+	result, err := svc.Run(t.Context(), Request{GuildID: "g", ChannelID: "ch1"})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if result.Posted || pub.channelID != "" {
+		t.Error("nothing should be published when not publishable")
+	}
+}
+
+func TestRunPublishFailure(t *testing.T) {
+	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
+	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
+	svc := newTestService(collector, summarizer, &fakeNotifier{})
+	svc.Publisher = &fakePublisher{err: errors.New("discord down")}
+
+	if _, err := svc.Run(t.Context(), Request{GuildID: "g", ChannelID: "ch1"}); err == nil {
+		t.Error("Run should propagate publish error")
+	}
+}
+
 func TestOddityPostsEye(t *testing.T) {
 	collector := &fakeCollector{result: CollectorResult{Digests: testDigests, TotalMessages: 1}}
 	summarizer := &fakeSummarizer{responses: []func() (string, error){okHighlights}}
