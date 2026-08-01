@@ -4,7 +4,7 @@ package tasks
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -127,7 +127,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 		BotID:      botID,
 	})
 	if err != nil {
-		log.Printf("daily summary: failed to generate message: %v", err)
+		slog.ErrorContext(r.Context(), "failed to generate summary", "target", targetName, "error", err)
 		http.Error(w, "failed to generate summary", http.StatusInternalServerError)
 		return
 	}
@@ -148,7 +148,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 
 	if trimmed != "" {
 		if _, err := h.sender.ChannelMessageSend(target.ChannelID, trimmed); err != nil {
-			log.Printf("daily summary: failed to post header message: %v", err)
+			slog.ErrorContext(r.Context(), "failed to post summary header", "target", targetName, "channel_id", target.ChannelID, "error", err)
 			http.Error(w, "failed to post summary", http.StatusInternalServerError)
 			return
 		}
@@ -159,7 +159,7 @@ func (h *Handler) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, err := h.sender.ChannelMessageSendComplex(target.ChannelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}); err != nil {
-			log.Printf("daily summary: failed to post embed message: %v", err)
+			slog.ErrorContext(r.Context(), "failed to post summary embed", "target", targetName, "channel_id", target.ChannelID, "error", err)
 			http.Error(w, "failed to post summary", http.StatusInternalServerError)
 			return
 		}

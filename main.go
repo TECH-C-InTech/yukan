@@ -109,7 +109,7 @@ func run() error {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("HTTP server listening on :%s", cfg.Port) //nolint:gosec // PORT は運用者が設定する環境変数で外部入力ではない
+		slog.Info("http server listening", "port", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
