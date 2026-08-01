@@ -10,6 +10,31 @@ variable "image" {
   default     = "asia-northeast1-docker.pkg.dev/yukan-discord-bot/yukan-bot/discord-yukan"
 }
 
+# 夕刊の投稿先。チャンネル ID は秘匿情報ではないためここで管理する
+variable "summary_targets" {
+  description = "YUKAN_SUMMARY_TARGETS に渡す投稿先定義"
+  type = map(object({
+    guild_id        = string
+    source_guild_id = string
+    channel_id      = string
+    log_channel_id  = string
+  }))
+  default = {
+    prod = {
+      guild_id        = "1239827951667908668"
+      source_guild_id = "1239827951667908668"
+      channel_id      = "1418904371579719710"
+      log_channel_id  = "1430142792314650764"
+    }
+    dev = {
+      guild_id        = "1239827951667908668"
+      source_guild_id = "1239827951667908668"
+      channel_id      = "1417771223433351170"
+      log_channel_id  = "1417771223433351170"
+    }
+  }
+}
+
 locals {
   services = merge(
     {
@@ -86,6 +111,11 @@ resource "google_cloud_run_v2_service" "yukan" {
       env {
         name  = "YUKAN_DEFAULT_TARGET"
         value = each.value.default_target
+      }
+
+      env {
+        name  = "YUKAN_SUMMARY_TARGETS"
+        value = jsonencode(var.summary_targets)
       }
     }
   }
