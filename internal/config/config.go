@@ -81,23 +81,25 @@ func Load() (Config, error) {
 		cfg.DefaultTarget = value
 	}
 
-	if lookback := parseEnvInt("YUKAN_SUMMARY_LOOKBACK_HOURS"); lookback > 0 {
-		cfg.Summary.Lookback = time.Duration(lookback) * time.Hour
+	intOverrides := []struct {
+		key   string
+		apply func(int)
+	}{
+		{"YUKAN_SUMMARY_LOOKBACK_HOURS", func(v int) { cfg.Summary.Lookback = time.Duration(v) * time.Hour }},
+		{"YUKAN_SUMMARY_FETCH_LIMIT", func(v int) { cfg.Summary.FetchLimit = v }},
+		{"YUKAN_SUMMARY_MESSAGE_BUDGET", func(v int) { cfg.Summary.MessageCharBudget = v }},
+		{"YUKAN_SUMMARY_MAX_HIGHLIGHTS", func(v int) { cfg.Summary.MaxHighlights = v }},
+		{"YUKAN_SUMMARY_MAX_ATTEMPTS", func(v int) { cfg.Summary.MaxAttempts = v }},
+		{"YUKAN_SUMMARY_MAX_CONCURRENCY", func(v int) { cfg.Summary.MaxConcurrency = v }},
 	}
-	if fetchLimit := parseEnvInt("YUKAN_SUMMARY_FETCH_LIMIT"); fetchLimit > 0 {
-		cfg.Summary.FetchLimit = fetchLimit
-	}
-	if budget := parseEnvInt("YUKAN_SUMMARY_MESSAGE_BUDGET"); budget > 0 {
-		cfg.Summary.MessageCharBudget = budget
-	}
-	if maxHighlights := parseEnvInt("YUKAN_SUMMARY_MAX_HIGHLIGHTS"); maxHighlights > 0 {
-		cfg.Summary.MaxHighlights = maxHighlights
-	}
-	if attempts := parseEnvInt("YUKAN_SUMMARY_MAX_ATTEMPTS"); attempts > 0 {
-		cfg.Summary.MaxAttempts = attempts
-	}
-	if concurrency := parseEnvInt("YUKAN_SUMMARY_MAX_CONCURRENCY"); concurrency > 0 {
-		cfg.Summary.MaxConcurrency = concurrency
+	for _, o := range intOverrides {
+		value, set, err := parsePositiveEnvInt(o.key)
+		if err != nil {
+			return Config{}, err
+		}
+		if set {
+			o.apply(value)
+		}
 	}
 
 	if rawTargets := strings.TrimSpace(os.Getenv("YUKAN_SUMMARY_TARGETS")); rawTargets != "" {
@@ -135,16 +137,21 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-func parseEnvInt(key string) int {
+// parsePositiveEnvInt は環境変数を正の整数として読む。未設定は (0, false, nil)。
+// 整数でない・0 以下の値は設定ミスとしてエラーを返す (以前は無言でデフォルトに落ちていた)。
+func parsePositiveEnvInt(key string) (int, bool, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
-		return 0
+		return 0, false, nil
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0
+		return 0, false, fmt.Errorf("%s must be an integer, got %q", key, raw)
 	}
-	return value
+	if value <= 0 {
+		return 0, false, fmt.Errorf("%s must be positive, got %d", key, value)
+	}
+	return value, true, nil
 }
 
 func parseTargets(raw string) (map[string]Target, error) {
