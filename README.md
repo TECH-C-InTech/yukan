@@ -48,11 +48,12 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 | `YUKAN_FORCE_EMPTY_HIGHLIGHTS` |  | テスト・デバッグ用: `true` で Gemini を呼ばず空ハイライトを返す |
 
 ## デプロイ
-Google Cloud Run を想定しており、`Makefile` でビルド・デプロイできます。
-```bash
-make deploy
-```
-Secrets (`DISCORD_BOT_TOKEN`, `GEMINI_API_KEY`) は Secret Manager で管理し、`--set-secrets` オプションに合わせて指定してください。
+デプロイは GitHub Actions で行います。手元からの `make deploy` は廃止しました。
+
+1. main にマージすると `deploy` ワークフローが SHA タグ付きイメージをビルドし **staging** (`discord-yukan-stg`) に自動デプロイ
+2. staging を検証したら、Actions の `promote` ワークフローを手動実行して同じイメージを **prod** (`discord-yukan`) に昇格
+
+インフラ (Cloud Run / Scheduler / IAM / Secret Manager) は `infra/` の Terraform + tfaction で管理しています。詳細は [infra/README.md](infra/README.md) を参照。
 
 ## フロー図
 
