@@ -157,7 +157,9 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 	return result, nil
 }
 
+// info はログ (Cloud Logging) と運用者向け Discord 通知の両方に流す。
 func (s *Service) info(ctx context.Context, message string) {
+	slog.InfoContext(ctx, message)
 	if s != nil && s.Notifier != nil {
 		s.Notifier.Info(ctx, message)
 
@@ -168,8 +170,6 @@ func (s *Service) info(ctx context.Context, message string) {
 		if oddity() {
 			s.Notifier.Info(ctx, "👁️👁️")
 		}
-	} else {
-		slog.InfoContext(ctx, message)
 	}
 }
 
@@ -178,10 +178,9 @@ func defaultOddity() bool {
 }
 
 func (s *Service) error(ctx context.Context, message string) {
+	slog.ErrorContext(ctx, message)
 	if s != nil && s.Notifier != nil {
 		s.Notifier.Error(ctx, message)
-	} else {
-		slog.ErrorContext(ctx, message)
 	}
 }
 

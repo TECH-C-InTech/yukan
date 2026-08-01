@@ -3,7 +3,7 @@ package notifier
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -43,8 +43,6 @@ func (n *DiscordNotifier) post(ctx context.Context, prefix, message string) {
 		trimmed = string([]rune(trimmed)[:n.MaxMessageLength]) + "…"
 	}
 
-	log.Printf("%s: %s", prefix, trimmed)
-
 	channelID := n.ChannelID
 	if target := TargetFromContext(ctx); target != "" {
 		if mapped := n.TargetChannels[target]; mapped != "" {
@@ -56,6 +54,6 @@ func (n *DiscordNotifier) post(ctx context.Context, prefix, message string) {
 		return
 	}
 	if _, err := n.Session.ChannelMessageSend(channelID, trimmed); err != nil {
-		log.Printf("failed to post %s message to Discord: %v", prefix, err)
+		slog.ErrorContext(ctx, "failed to post operator notification to Discord", "kind", prefix, "channel_id", channelID, "error", err)
 	}
 }
