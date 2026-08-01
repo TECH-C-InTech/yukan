@@ -66,7 +66,6 @@ func Load() (Config, error) {
 			MaxAttempts:       defaultMaxAttempts,
 			MaxConcurrency:    defaultCollectorConcurrency,
 		},
-		Targets:       defaultTargets(),
 		DefaultTarget: "prod",
 	}
 
@@ -102,19 +101,18 @@ func Load() (Config, error) {
 		}
 	}
 
-	if rawTargets := strings.TrimSpace(os.Getenv("YUKAN_SUMMARY_TARGETS")); rawTargets != "" {
-		overrides, err := parseTargets(rawTargets)
-		if err != nil {
-			return Config{}, err
-		}
-		if len(overrides) > 0 {
-			cfg.Targets = overrides
-		}
+	rawTargets := strings.TrimSpace(os.Getenv("YUKAN_SUMMARY_TARGETS"))
+	if rawTargets == "" {
+		return Config{}, fmt.Errorf(`YUKAN_SUMMARY_TARGETS is not set (expected JSON like {"prod":{"guild_id":"...","channel_id":"..."}})`)
 	}
-
-	if len(cfg.Targets) == 0 {
-		return Config{}, fmt.Errorf("no summary targets configured")
+	targets, err := parseTargets(rawTargets)
+	if err != nil {
+		return Config{}, err
 	}
+	if len(targets) == 0 {
+		return Config{}, fmt.Errorf("YUKAN_SUMMARY_TARGETS defines no targets")
+	}
+	cfg.Targets = targets
 
 	for name, target := range cfg.Targets {
 		target.GuildID = strings.TrimSpace(target.GuildID)
@@ -165,21 +163,4 @@ func parseTargets(raw string) (map[string]Target, error) {
 		}
 	}
 	return targets, nil
-}
-
-func defaultTargets() map[string]Target {
-	return map[string]Target{
-		"prod": {
-			GuildID:       "1239827951667908668",
-			SourceGuildID: "1239827951667908668",
-			ChannelID:     "1418904371579719710",
-			LogChannelID:  "1430142792314650764",
-		},
-		"dev": {
-			GuildID:       "1239827951667908668",
-			SourceGuildID: "1239827951667908668",
-			ChannelID:     "1417771223433351170",
-			LogChannelID:  "1417771223433351170",
-		},
-	}
 }

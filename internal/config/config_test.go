@@ -10,6 +10,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("DISCORD_BOT_TOKEN", "token")
 	t.Setenv("GEMINI_API_KEY", "key")
+	t.Setenv("YUKAN_SUMMARY_TARGETS", `{"prod":{"guild_id":"g-prod","channel_id":"c-prod"},"dev":{"guild_id":"g-dev","channel_id":"c-dev"}}`)
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -84,6 +85,15 @@ func TestLoadIntOverrides(t *testing.T) {
 				t.Errorf("override %s=%s not applied", tt.key, tt.value)
 			}
 		})
+	}
+}
+
+func TestLoadTargetsRequired(t *testing.T) {
+	t.Setenv("DISCORD_BOT_TOKEN", "token")
+	t.Setenv("GEMINI_API_KEY", "key")
+	t.Setenv("YUKAN_SUMMARY_TARGETS", "")
+	if _, err := Load(); err == nil {
+		t.Error("Load() should fail without YUKAN_SUMMARY_TARGETS")
 	}
 }
 

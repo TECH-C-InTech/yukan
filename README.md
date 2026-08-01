@@ -38,7 +38,7 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 | `PORT` |  | HTTP サーバーの待ち受けポート (既定: `8080`) |
 | `YUKAN_LOG_CHANNEL_ID` |  | ログ通知先 Discord チャンネル ID |
 | `YUKAN_DEFAULT_TARGET` |  | `/tasks/daily-summary` 未指定時に使うターゲット名 (既定: `prod`) |
-| `YUKAN_SUMMARY_TARGETS` |  | `{"prod":{"guild_id":"...","channel_id":"..."},"dev":{...}}` の JSON。未指定時はソース既定値 |
+| `YUKAN_SUMMARY_TARGETS` | ✅ | `{"prod":{"guild_id":"...","channel_id":"..."},"dev":{...}}` の JSON (本番値は `infra/` の Terraform が注入) |
 | `YUKAN_SUMMARY_LOOKBACK_HOURS` |  | メッセージ収集のルックバック時間 (既定 24) |
 | `YUKAN_SUMMARY_FETCH_LIMIT` |  | チャンネルごとのページングサイズ (既定 100) |
 | `YUKAN_SUMMARY_MESSAGE_BUDGET` |  | 見出しメッセージ最大文字数 (既定 1800) |
