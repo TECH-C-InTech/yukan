@@ -290,14 +290,6 @@ func resolveAuthor(session *discordgo.Session, guildID string, msg *discordgo.Me
 		}
 	}
 
-	if session != nil && session.State != nil && guildID != "" && userID != "" {
-		if member, err := session.State.Member(guildID, userID); err == nil {
-			if name := displayNameFromMember(member); name != "" {
-				return putAndReturn(userID, name)
-			}
-		}
-	}
-
 	if session != nil && guildID != "" && userID != "" {
 		if member, err := session.GuildMember(guildID, userID); err == nil {
 			if name := displayNameFromMember(member); name != "" {
