@@ -90,11 +90,11 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 			summaryCtx = context.Background()
 		}
 
-		prompt := buildSummaryPrompt(collectorResult.Digests, s.maxHighlights())
+		prompt := buildSummaryPrompt(collectorResult.Digests, s.Config.MaxHighlights)
 		if prompt == "" {
 			s.info(ctx, "Gemini呼び出しスキップ (プロンプトなし)")
 		} else {
-			maxAttempts := s.maxAttempts()
+			maxAttempts := s.Config.MaxAttempts
 			var lastRawResponse string
 			for attempt := 1; attempt <= maxAttempts && summaryCtx.Err() == nil; attempt++ {
 				s.info(ctx, fmt.Sprintf("Gemini呼び出し開始 (%d/%d)", attempt, maxAttempts))
@@ -116,7 +116,7 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 					continue
 				}
 				highlights = summaryHighlights
-				finalMessage = composeFinalMessage(highlights, collectorResult.FallbackText, s.charBudget())
+				finalMessage = composeFinalMessage(highlights, collectorResult.FallbackText, s.Config.MessageCharBudget)
 				log.Printf("summary: Gemini attempt %d/%d succeeded with %d highlights", attempt, maxAttempts, len(highlights))
 				break
 			}
@@ -139,7 +139,7 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 		finalMessage = strings.TrimSpace(collectorResult.FallbackText)
 	}
 	if finalMessage != "" {
-		finalMessage = truncateRunes(finalMessage, s.charBudget())
+		finalMessage = truncateRunes(finalMessage, s.Config.MessageCharBudget)
 	}
 
 	content, embeds := BuildSummaryMessage(finalMessage, highlights, collectorResult.Digests)
@@ -153,27 +153,6 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 	s.info(ctx, fmt.Sprintf("出力準備完了 (文字数=%d, 累計%s)", utf8.RuneCountInString(result.Content), formatDuration(time.Since(workflowStart))))
 
 	return result, nil
-}
-
-func (s *Service) charBudget() int {
-	if s == nil || s.Config.MessageCharBudget <= 0 {
-		return 1800
-	}
-	return s.Config.MessageCharBudget
-}
-
-func (s *Service) maxHighlights() int {
-	if s == nil || s.Config.MaxHighlights <= 0 {
-		return 3
-	}
-	return s.Config.MaxHighlights
-}
-
-func (s *Service) maxAttempts() int {
-	if s == nil || s.Config.MaxAttempts <= 0 {
-		return 5
-	}
-	return s.Config.MaxAttempts
 }
 
 func (s *Service) info(ctx context.Context, message string) {
