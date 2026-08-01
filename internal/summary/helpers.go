@@ -99,17 +99,6 @@ func displayNameFromUser(user *discordgo.User) string {
 	return username
 }
 
-func extractAttachmentURLs(msg *discordgo.Message) []string {
-	if msg == nil || len(msg.Attachments) == 0 {
-		return nil
-	}
-	urls := make([]string, 0, len(msg.Attachments))
-	for _, attachment := range msg.Attachments {
-		urls = append(urls, attachment.URL)
-	}
-	return urls
-}
-
 func userAvatarURL(user *discordgo.User) string {
 	if user == nil {
 		return ""

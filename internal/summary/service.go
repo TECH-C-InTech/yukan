@@ -112,10 +112,6 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 		return result, err
 	}
 
-	result.Digests = collectorResult.Digests
-	result.Fallback = collectorResult.FallbackText
-	result.TotalMessages = collectorResult.TotalMessages
-
 	s.info(ctx, fmt.Sprintf("メッセージ取得終了 (チャンネル=%d, メッセージ=%d, 所要%s)", len(collectorResult.Digests), collectorResult.TotalMessages, formatDuration(time.Since(workflowStart))))
 	if collectorResult.SkippedChannels > 0 {
 		s.info(ctx, fmt.Sprintf("取得できないチャンネルを%d件スキップしました", collectorResult.SkippedChannels))
@@ -196,7 +192,6 @@ func (s *Service) Generate(ctx context.Context, req Request) (Result, error) {
 	result.Embeds = embeds
 	result.Highlights = highlights
 	result.Publishable = len(embeds) > 0
-	result.CompletedAt = time.Now()
 
 	s.info(ctx, fmt.Sprintf("出力準備完了 (文字数=%d, 累計%s)", utf8.RuneCountInString(result.Content), formatDuration(time.Since(workflowStart))))
 
