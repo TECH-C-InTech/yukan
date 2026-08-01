@@ -1,0 +1,64 @@
+---
+name: deploy
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "infra/**"
+      - "aqua/**"
+      - "**.md"
+      - "tfaction-root.yaml"
+      - ".github/**"
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  IMAGE: asia-northeast1-docker.pkg.dev/yukan-discord-bot/yukan-bot/discord-yukan
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          service_account: ${{ vars.DEPLOY_SA }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          skip_install: false
+
+      - name: Configure docker auth
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: docker build -t "$IMAGE:${{ github.sha }}" .
+
+      - name: Push image
+        run: docker push "$IMAGE:${{ github.sha }}"
+
+      - name: Deploy to staging
+        run: |
+          gcloud run deploy discord-yukan-stg \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region asia-northeast1 \
+            --project yukan-discord-bot \
+            --quiet
