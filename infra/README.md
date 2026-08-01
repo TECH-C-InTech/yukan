@@ -20,7 +20,8 @@ yukan の GCP インフラ (Cloud Run / Cloud Scheduler / Secret Manager / Artif
 
 ## staging の手動トリガー
 
-staging にはスケジューラが無い。検証するときは自分の ID トークンで叩く (naoki のアカウントに stg 限定の invoker が付与済み):
+staging は平時は存在しない (`enable_staging = false`)。リハーサルが必要なときだけ true にして復活させる。
+staging にはスケジューラが無い。検証するときは自分の ID トークンで叩く (naoki のアカウントに stg 限定の invoker が付与される):
 
 ```bash
 STG_URL=$(gcloud run services describe discord-yukan-stg --region asia-northeast1 --project yukan-discord-bot --format='value(status.url)')

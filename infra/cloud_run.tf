@@ -1,7 +1,7 @@
 variable "enable_staging" {
   description = "リファクタリング期間中の一時 staging 環境を作成するか"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "image" {
@@ -117,6 +117,11 @@ resource "google_cloud_run_v2_service" "yukan" {
         name  = "YUKAN_SUMMARY_TARGETS"
         value = jsonencode(var.summary_targets)
       }
+
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
     }
   }
 
@@ -125,6 +130,8 @@ resource "google_cloud_run_v2_service" "yukan" {
       template[0].containers[0].image,
       client,
       client_version,
+      # provider が空の scaling ブロック差分を出し続けるノイズ対策
+      scaling,
     ]
   }
 

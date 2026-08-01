@@ -23,7 +23,7 @@ env:
   IMAGE: asia-northeast1-docker.pkg.dev/yukan-discord-bot/yukan-bot/discord-yukan
 
 jobs:
-  deploy-staging:
+  deploy-prod:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -55,9 +55,9 @@ jobs:
       - name: Push image
         run: docker push "$IMAGE:${{ github.sha }}"
 
-      - name: Deploy to staging
+      - name: Deploy to prod
         run: |
-          gcloud run deploy discord-yukan-stg \
+          gcloud run deploy discord-yukan \
             --image "$IMAGE:${{ github.sha }}" \
             --region asia-northeast1 \
             --project yukan-discord-bot \
