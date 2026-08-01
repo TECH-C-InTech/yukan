@@ -23,7 +23,6 @@ type Collector struct {
 
 const (
 	fallbackNoMessages = "過去24時間のメッセージはありません"
-	fallbackGeneric    = "夕刊を生成できませんでした。しばらくしてから再実行してください。"
 )
 
 // Collect gathers messages from the target guild within the configured lookback window.
@@ -187,7 +186,7 @@ func fallbackMessage(total int) string {
 	if total <= 0 {
 		return fallbackNoMessages
 	}
-	return fallbackGeneric
+	return ""
 }
 
 func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, cutoff time.Time, ch *discordgo.Channel, parentNames map[string]string, memberNames *nameCache) (*ChannelDigest, bool, error) {
@@ -225,14 +224,12 @@ func (c *Collector) collectChannel(ctx context.Context, guildID, botID string, c
 			}
 
 			digest := MessageDigest{
-				Author:         resolveAuthor(c.Session, guildID, msg, memberNames),
-				AvatarURL:      userAvatarURL(msg.Author),
-				Content:        extractContent(msg),
-				Timestamp:      timestamp,
-				MessageID:      msg.ID,
-				ChannelID:      ch.ID,
-				Link:           buildMessageLink(guildID, ch.ID, msg.ID),
-				AttachmentURLs: extractAttachmentURLs(msg),
+				Author:    resolveAuthor(c.Session, guildID, msg, memberNames),
+				AvatarURL: userAvatarURL(msg.Author),
+				Content:   extractContent(msg),
+				Timestamp: timestamp,
+				ChannelID: ch.ID,
+				Link:      buildMessageLink(guildID, ch.ID, msg.ID),
 			}
 
 			collected = append(collected, digest)

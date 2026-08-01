@@ -45,7 +45,6 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 | `YUKAN_SUMMARY_MAX_HIGHLIGHTS` |  | Gemini に要求する最大ハイライト数 (既定 3) |
 | `YUKAN_SUMMARY_MAX_ATTEMPTS` |  | Gemini 呼び出しリトライ回数 (既定 5) |
 | `YUKAN_SUMMARY_MAX_CONCURRENCY` |  | チャンネル収集の並列数 |
-| `YUKAN_FORCE_EMPTY_HIGHLIGHTS` |  | テスト・デバッグ用: `true` で Gemini を呼ばず空ハイライトを返す |
 
 ## デプロイ
 デプロイは GitHub Actions で行います。手元からの `make deploy` は廃止しました。

@@ -18,14 +18,12 @@ type Highlight struct {
 
 // MessageDigest represents a single Discord message used for summarization.
 type MessageDigest struct {
-	Author         string
-	AvatarURL      string
-	Content        string
-	Timestamp      time.Time
-	MessageID      string
-	ChannelID      string
-	Link           string
-	AttachmentURLs []string
+	Author    string
+	AvatarURL string
+	Content   string
+	Timestamp time.Time
+	ChannelID string
+	Link      string
 }
 
 // ChannelDigest aggregates messages per channel or thread.
@@ -56,11 +54,7 @@ type Result struct {
 	Content       string
 	Embeds        []*discordgo.MessageEmbed
 	Highlights    []Highlight
-	Digests       []ChannelDigest
-	Fallback      string
-	TotalMessages int
 	WorkflowStart time.Time
-	CompletedAt   time.Time
 	Publishable   bool
 	// Posted は Run で実際に Discord へ投稿されたかを示す
 	Posted bool
