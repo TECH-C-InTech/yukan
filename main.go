@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,12 +18,14 @@ import (
 	"yukan/internal/config"
 	"yukan/internal/discord"
 	"yukan/internal/gemini"
+	"yukan/internal/logging"
 	"yukan/internal/notifier"
 	"yukan/internal/summary"
 	"yukan/internal/tasks"
 )
 
 func main() {
+	slog.SetDefault(slog.New(logging.NewHandler()))
 	if err := run(); err != nil {
 		// 初期化失敗は即終了する。Cloud Run 側でリビジョンが unhealthy になり、
 		// 壊れたデプロイが「健康な503」に見える事故を防ぐ
@@ -91,9 +94,12 @@ func run() error {
 		DefaultTarget:  cfg.DefaultTarget,
 	})
 
+	// Cloud Run 上ではリクエストのトレース ID をログに載せる
+	handler := logging.HTTPMiddleware(os.Getenv("GOOGLE_CLOUD_PROJECT"), mux)
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
