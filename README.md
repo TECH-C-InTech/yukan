@@ -49,8 +49,9 @@ Cloud Scheduler/Tasks ──► HTTP /tasks/daily-summary
 ## デプロイ
 デプロイは GitHub Actions で行います。手元からの `make deploy` は廃止しました。
 
-1. main にマージすると `deploy` ワークフローが SHA タグ付きイメージをビルドし **staging** (`discord-yukan-stg`) に自動デプロイ
-2. staging を検証したら、Actions の `promote` ワークフローを手動実行して同じイメージを **prod** (`discord-yukan`) に昇格
+- main にマージすると `deploy` ワークフローが SHA タグ付きイメージをビルドし **prod** (`discord-yukan`) に自動デプロイします
+- 不具合時は `gcloud run services update-traffic` で直前リビジョンに即ロールバックできます
+- 大きな変更のリハーサルが必要な場合は、`infra/` の `enable_staging` を true にすると一時 staging 環境を復活できます
 
 インフラ (Cloud Run / Scheduler / IAM / Secret Manager) は `infra/` の Terraform + tfaction で管理しています。詳細は [infra/README.md](infra/README.md) を参照。
 
